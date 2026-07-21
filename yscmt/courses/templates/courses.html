@@ -1,0 +1,18 @@
+<h1>
+Available Courses
+</h1>
+
+
+{% for course in courses %}
+
+<h2>
+{{course.name}}
+</h2>
+
+
+<p>
+{{course.description}}
+</p>
+
+
+{% endfor %}
