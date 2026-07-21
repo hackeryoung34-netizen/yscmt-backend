@@ -1,26 +1,34 @@
 from pathlib import Path
 from datetime import timedelta
-
+import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = "django-insecure-change-this-key"
+# Security
+SECRET_KEY = os.environ.get(
+    "SECRET_KEY",
+    "django-insecure-change-this-key"
+)
 
-DEBUG = True
+DEBUG = os.environ.get("DEBUG", "True") == "True"
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.environ.get(
+    "ALLOWED_HOSTS",
+    "127.0.0.1,localhost,yscmt-backend.onrender.com"
+).split(",")
 
+# Django REST Framework
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
 }
 
+# JWT Settings
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
 }
-
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -41,11 +49,12 @@ INSTALLED_APPS = [
     "payments",
     "quizzes",
     "notifications",
-    'quiz_questions',
-    'quiz_attempts.apps.QuizAttemptsConfig',
-     "dashboard",
-     'progress',
+    "quiz_questions",
+    "quiz_attempts.apps.QuizAttemptsConfig",
+    "dashboard",
+    "progress",
 ]
+
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "corsheaders.middleware.CorsMiddleware",
@@ -56,6 +65,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
 ROOT_URLCONF = "yscmt.urls"
 
 TEMPLATES = [
@@ -118,15 +128,12 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = False
 
-REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
-    ),
-}
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5177",
     "http://127.0.0.1:5177",
+    "https://yscmt-community.vercel.app",
 ]
+
 CORS_ALLOW_CREDENTIALS = True
