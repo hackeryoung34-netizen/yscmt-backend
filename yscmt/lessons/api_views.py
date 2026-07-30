@@ -1,20 +1,47 @@
-from rest_framework import generics
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import AllowAny
+
 from .models import Lesson
 from .serializers import LessonSerializer
 
 
-class LessonListAPIView(generics.ListAPIView):
-    serializer_class = LessonSerializer
+class LessonListAPIView(APIView):
 
-    def get_queryset(self):
-        course = self.request.GET.get("course")
+    permission_classes = [AllowAny]
 
-        if course:
-            return Lesson.objects.filter(course_id=course)
+    def get(self, request):
 
-        return Lesson.objects.all()
+        course_id = request.GET.get("course")
+
+        lessons = Lesson.objects.all()
+
+        if course_id:
+            lessons = lessons.filter(course_id=course_id)
+
+        serializer = LessonSerializer(
+            lessons,
+            many=True
+        )
+
+        return Response(serializer.data)
 
 
-class LessonDetailAPIView(generics.RetrieveAPIView):
-    queryset = Lesson.objects.all()
-    serializer_class = LessonSerializer
+class LessonDetailAPIView(APIView):
+
+    permission_classes = [AllowAny]
+
+    def get(self, request, pk):
+
+        try:
+            lesson = Lesson.objects.get(pk=pk)
+
+        except Lesson.DoesNotExist:
+            return Response(
+                {"error": "Lesson not found"},
+                status=404
+            )
+
+        serializer = LessonSerializer(lesson)
+
+        return Response(serializer.data)

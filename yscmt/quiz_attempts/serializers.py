@@ -7,3 +7,7 @@ class QuizAttemptSerializer(serializers.ModelSerializer):
     class Meta:
         model = QuizAttempt
         fields = "__all__"
+        read_only_fields = [
+            "student",
+            "attempted_at",
+        ]

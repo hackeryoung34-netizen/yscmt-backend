@@ -1,11 +1,13 @@
 from django.contrib import admin
 from django.urls import path, include
 
+from django.conf import settings
+from django.conf.urls.static import static
+
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
-
 
 urlpatterns = [
 
@@ -14,20 +16,20 @@ urlpatterns = [
     # Authentication
     path("api/auth/", include("accounts.urls")),
 
-    # JWT Login
+    # JWT Authentication
     path(
         "api/token/",
         TokenObtainPairView.as_view(),
-        name="token_obtain_pair"
+        name="token_obtain_pair",
     ),
 
     path(
         "api/token/refresh/",
         TokenRefreshView.as_view(),
-        name="token_refresh"
+        name="token_refresh",
     ),
 
-    # Main apps
+    # Main Apps
     path("api/courses/", include("courses.urls")),
     path("api/dashboard/", include("dashboard.urls")),
     path("api/lessons/", include("lessons.urls")),
@@ -35,9 +37,16 @@ urlpatterns = [
     path("api/enrollments/", include("enrollments.urls")),
     path("api/certificates/", include("certificates.urls")),
 
-    # Quiz system
+    # Quiz System
     path("api/", include("quizzes.urls")),
     path("api/", include("quiz_questions.urls")),
     path("api/", include("quiz_attempts.urls")),
 
 ]
+
+# Serve uploaded media files during development
+if settings.DEBUG:
+    urlpatterns += static(
+        settings.MEDIA_URL,
+        document_root=settings.MEDIA_ROOT,
+    )

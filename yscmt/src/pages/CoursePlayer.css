@@ -1,0 +1,58 @@
+.course-player{
+display:flex;
+min-height:100vh;
+background:#f5f5f5;
+}
+
+.sidebar{
+width:320px;
+background:#1e293b;
+color:white;
+padding:20px;
+}
+
+.sidebar h2{
+margin-bottom:20px;
+}
+
+.sidebar button{
+display:block;
+width:100%;
+margin-bottom:10px;
+padding:12px;
+background:#334155;
+border:none;
+color:white;
+cursor:pointer;
+border-radius:8px;
+text-align:left;
+}
+
+.sidebar button:hover{
+background:#2563eb;
+}
+
+.sidebar .active{
+background:#16a34a;
+}
+
+.content{
+flex:1;
+padding:30px;
+}
+
+iframe{
+border-radius:10px;
+border:none;
+}
+
+.content button{
+margin-top:20px;
+padding:12px 25px;
+background:#16a34a;
+border:none;
+color:white;
+font-size:16px;
+border-radius:8px;
+cursor:pointer;
+}
