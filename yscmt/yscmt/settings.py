@@ -193,17 +193,28 @@ SIMPLE_JWT = {
 # CORS
 # ==========================================================
 
-CORS_ALLOW_ALL_ORIGINS = False
-
 CORS_ALLOW_CREDENTIALS = True
 
-CSRF_TRUSTED_ORIGINS = [
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
+CORS_ALLOWED_ORIGINS = [
+    # Local development
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+    "http://localhost:5175",
+    "http://127.0.0.1:5175",
+    "http://localhost:5176",
+    "http://127.0.0.1:5176",
+    "http://localhost:5177",
+    "http://127.0.0.1:5177",
 
-    "https://yscmtcommunity.vercel.app",
-    "https://yscmt-community.vercel.app",
+    # Production
     "https://yscmt-react.vercel.app",
+]
+
+# Allow all Vercel preview deployments
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://.*\.vercel\.app$",
 ]
 
 # ==========================================================
@@ -213,8 +224,9 @@ CSRF_TRUSTED_ORIGINS = [
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:8000",
     "http://127.0.0.1:8000",
-    "https://yscmtcommunity.vercel.app",
-    "https://yscmt-community.vercel.app",
+
+    "https://yscmt-react.vercel.app",
+    "https://*.vercel.app",
 ]
 
 # ==========================================================
