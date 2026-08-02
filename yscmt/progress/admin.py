@@ -1,3 +1,24 @@
 from django.contrib import admin
+from .models import LessonProgress
 
-# Register your models here.
+
+@admin.register(LessonProgress)
+class LessonProgressAdmin(admin.ModelAdmin):
+    list_display = (
+        "student",
+        "lesson",
+        "completed",
+        "completed_at",
+    )
+
+    list_filter = (
+        "completed",
+        "lesson",
+    )
+
+    search_fields = (
+        "student__username",
+        "lesson__title",
+    )
+
+    ordering = ("-completed_at",)

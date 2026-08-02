@@ -4,14 +4,11 @@ from .models import Lesson
 
 @admin.register(Lesson)
 class LessonAdmin(admin.ModelAdmin):
+
     list_display = (
         "title",
         "course",
-        "order",
-    )
-
-    list_filter = (
-        "course",
+        "created_at",
     )
 
     search_fields = (
@@ -19,7 +16,11 @@ class LessonAdmin(admin.ModelAdmin):
         "course__name",
     )
 
+    list_filter = (
+        "course",
+    )
+
     ordering = (
         "course",
-        "order",
+        "title",
     )

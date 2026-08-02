@@ -1,0 +1,40 @@
+version: "3.9"
+
+services:
+
+  db:
+    image: postgres:16
+    restart: always
+
+    environment:
+      POSTGRES_DB: yscmt
+      POSTGRES_USER: yscmt
+      POSTGRES_PASSWORD: yb42009034zk34@YBZKD
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  web:
+    build: .
+
+    command: gunicorn yscmt.wsgi:application --bind 0.0.0.0:8000
+
+    volumes:
+      - .:/app
+
+    ports:
+      - "8000:8000"
+
+    environment:
+      USE_POSTGRES: "True"
+      POSTGRES_DB: yscmt
+      POSTGRES_USER: yscmt
+      POSTGRES_PASSWORD: yb42009034zk34@YBZKD
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:
