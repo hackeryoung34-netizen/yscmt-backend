@@ -1,7 +1,7 @@
 from pathlib import Path
 from datetime import timedelta
 import os
-
+import dj_database_url
 # ==========================================================
 # Base Directory
 # ==========================================================
@@ -102,27 +102,11 @@ WSGI_APPLICATION = "yscmt.wsgi.application"
 # Database
 # ==========================================================
 
-USE_POSTGRES = os.environ.get("USE_POSTGRES", "False") == "True"
-
-if USE_POSTGRES:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.postgresql",
-            "NAME": os.environ.get("POSTGRES_DB", "yscmt"),
-            "USER": os.environ.get("POSTGRES_USER", "yscmt"),
-            "PASSWORD": os.environ.get("POSTGRES_PASSWORD", ""),
-            "HOST": os.environ.get("POSTGRES_HOST", "db"),
-            "PORT": os.environ.get("POSTGRES_PORT", "5432"),
-        }
-    }
-else:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
-        }
-    }
-
+DATABASES = {
+    "default": dj_database_url.config(
+        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}"
+    )
+}
 # ==========================================================
 # Password Validation
 # ==========================================================
@@ -213,22 +197,13 @@ CORS_ALLOW_ALL_ORIGINS = False
 
 CORS_ALLOW_CREDENTIALS = True
 
-CORS_ALLOWED_ORIGINS = [
-    # Local React
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:5174",
-    "http://127.0.0.1:5174",
-    "http://localhost:5175",
-    "http://127.0.0.1:5175",
-    "http://localhost:5176",
-    "http://127.0.0.1:5176",
-    "http://localhost:5177",
-    "http://127.0.0.1:5177",
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
 
-    # Production
     "https://yscmtcommunity.vercel.app",
     "https://yscmt-community.vercel.app",
+    "https://yscmt-react.vercel.app",
 ]
 
 # ==========================================================
