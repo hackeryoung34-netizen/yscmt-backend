@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.urls import path, include
+from django.http import JsonResponse
 
 from django.conf import settings
 from django.conf.urls.static import static
@@ -9,7 +10,17 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 
+def home(request):
+    return JsonResponse({
+        "status": "success",
+        "message": "YSCMT Backend API is running",
+        "api": "/api/"
+    })
+
 urlpatterns = [
+
+    # Home
+    path("", home),
 
     path("admin/", admin.site.urls),
 
@@ -41,10 +52,8 @@ urlpatterns = [
     path("api/", include("quizzes.urls")),
     path("api/", include("quiz_questions.urls")),
     path("api/", include("quiz_attempts.urls")),
-
 ]
 
-# Serve uploaded media files during development
 if settings.DEBUG:
     urlpatterns += static(
         settings.MEDIA_URL,
