@@ -21,7 +21,17 @@ class Certificate(models.Model):
         unique=True
     )
 
-    issued_at = models.DateTimeField(auto_now_add=True)
+    issued_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["student", "course"],
+                name="unique_student_course_certificate",
+            )
+        ]
 
     def __str__(self):
         return self.certificate_number

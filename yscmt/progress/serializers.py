@@ -15,7 +15,6 @@ class LessonProgressSerializer(serializers.ModelSerializer):
         read_only=True
     )
 
-
     class Meta:
         model = LessonProgress
 
@@ -30,6 +29,5 @@ class LessonProgressSerializer(serializers.ModelSerializer):
 
         read_only_fields = [
             "id",
-            "student",
             "completed_at",
         ]

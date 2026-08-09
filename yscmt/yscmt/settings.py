@@ -19,6 +19,12 @@ SECRET_KEY = os.environ.get(
 
 DEBUG = os.environ.get("DEBUG", "True") == "True"
 
+# Frontend URL used for public certificate verification links
+FRONTEND_URL = os.environ.get(
+    "FRONTEND_URL",
+    "http://localhost:5175",
+).rstrip("/")
+
 ALLOWED_HOSTS = [
     "127.0.0.1",
     "localhost",
@@ -213,13 +219,13 @@ CORS_ALLOWED_ORIGINS = [
 
     # Production
     "https://yscmt-react.vercel.app",
+    "https://yscmt-community.vercel.app",
 ]
 
-# Allow all Vercel preview deployments
+# Allow Vercel preview deployments
 CORS_ALLOWED_ORIGIN_REGEXES = [
     r"^https://.*\.vercel\.app$",
 ]
-
 # ==========================================================
 # CSRF
 # ==========================================================
@@ -244,3 +250,7 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 DATA_UPLOAD_MAX_MEMORY_SIZE = 1024 * 1024 * 100
 FILE_UPLOAD_MAX_MEMORY_SIZE = 1024 * 1024 * 100
+
+MEDIA_URL = "/media/"
+
+MEDIA_ROOT = BASE_DIR / "media"

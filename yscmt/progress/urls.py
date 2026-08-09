@@ -1,18 +1,20 @@
 from django.urls import path
-from .views import (
-    ProgressListCreateAPIView,
-    ProgressDetailAPIView,
+
+from .api_views import (
+    LessonProgressListAPIView,
+    LessonProgressAPIView,
 )
 
 urlpatterns = [
     path(
         "",
-        ProgressListCreateAPIView.as_view(),
+        LessonProgressListAPIView.as_view(),
         name="progress-list",
     ),
+
     path(
-        "<int:pk>/",
-        ProgressDetailAPIView.as_view(),
-        name="progress-detail",
+        "<int:lesson_id>/complete/",
+        LessonProgressAPIView.as_view(),
+        name="lesson-complete",
     ),
 ]
