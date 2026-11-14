@@ -17,6 +17,14 @@ update private.user_roles
 set role = 'admin'
 where user_id = '10000000-0000-4000-8000-000000000002';
 
+insert into auth.users (id,email,phone,raw_user_meta_data)
+values (
+  '10000000-0000-4000-8000-000000000003',
+  'student2@example.test',
+  '',
+  '{"full_name":"Second Student"}'::jsonb
+);
+
 insert into public.courses (id,title,description,level,active,fee_amount,fee_currency)
 values (
   '20000000-0000-4000-8000-000000000001',
@@ -67,6 +75,12 @@ values
   1,
   2
 );
+
+insert into public.enrollments (user_id,course_id,status)
+values ('10000000-0000-4000-8000-000000000003','20000000-0000-4000-8000-000000000001','pending');
+
+insert into public.enrollments (user_id,course_id,status)
+values ('10000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000001','pending');
 
 insert into public.classroom_sessions (
   id,course_id,title,description,meeting_url,starts_at,ends_at,status,created_by
@@ -321,6 +335,92 @@ begin
   end if;
   if (select id from public.portal_request_certificate('20000000-0000-4000-8000-000000000001')) <> v_certificate_id then
     raise exception 'Certificate request must be idempotent.';
+  end if;
+
+
+  -- Verify the trusted admin management surface and audit trail.
+  perform set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000002',false);
+
+  select * into v_admin_result from public.portal_admin_review_practice_submission(
+    v_practice_id,'approved','Practice accepted in integration test'
+  );
+  if v_admin_result.status <> 'approved' then
+    raise exception 'Admin practice review did not update the submission.';
+  end if;
+
+  select e.id into v_second_enrollment_id
+  from public.enrollments as e
+  where e.user_id='10000000-0000-4000-8000-000000000003'
+    and e.course_id='20000000-0000-4000-8000-000000000001';
+  select e.id into v_admin_enrollment_id
+  from public.enrollments as e
+  where e.user_id='10000000-0000-4000-8000-000000000002'
+    and e.course_id='20000000-0000-4000-8000-000000000001';
+
+  begin
+    perform * from public.portal_admin_review_enrollment(v_admin_enrollment_id,'approved','');
+    raise exception 'Admin must not approve their own enrolment.';
+  exception when insufficient_privilege then
+    null;
+  end;
+  delete from public.enrollments where id=v_admin_enrollment_id;
+
+  select * into v_admin_result
+  from public.portal_admin_review_enrollment(v_second_enrollment_id,'approved','Verified by admin test');
+  if v_admin_result.status <> 'approved' then
+    raise exception 'Admin enrolment approval failed.';
+  end if;
+
+  if (select count(*) from public.portal_admin_list_students(50)) <> 2 then
+    raise exception 'Admin student list should include both student accounts.';
+  end if;
+  if (select count(*) from public.portal_admin_list_enrollments(null,100)) <> 2 then
+    raise exception 'Admin enrolment list should include both student enrolments.';
+  end if;
+  if (select count(*) from public.portal_admin_list_paystack_payments()) <> 1 then
+    raise exception 'Admin Paystack payment list should contain the verified payment.';
+  end if;
+  if (select count(*) from public.portal_admin_list_payment_submissions()) <> 0 then
+    raise exception 'No manual payment submissions should exist in this fixture.';
+  end if;
+  if (select count(*) from public.portal_admin_list_practice_submissions()) <> 1 then
+    raise exception 'Admin practice list should contain the student submission.';
+  end if;
+  if (select count(*) from public.portal_admin_list_certificates()) <> 1 then
+    raise exception 'Admin certificate list should contain the issued certificate.';
+  end if;
+  if (select count(*) from public.portal_admin_list_exam_questions('40000000-0000-4000-8000-000000000001')) <> 2 then
+    raise exception 'Admin should be able to read exam answer keys.';
+  end if;
+
+  select id into v_new_course_id
+  from public.portal_admin_create_course('Admin Test Course','Admin-created course','Beginner',0,'NGN');
+  select id into v_new_lesson_id
+  from public.portal_admin_create_lesson(v_new_course_id,'Admin Lesson','Lesson content','',1);
+  select id into v_new_exam_id
+  from public.portal_admin_create_exam(v_new_course_id,'Admin Exam','Exam instructions',30,60);
+  select id into v_new_question_id
+  from public.portal_admin_create_exam_question(
+    v_new_exam_id,'Admin question?','["One","Two","Three","Four"]'::jsonb,2,1
+  );
+  if v_new_course_id is null or v_new_lesson_id is null or v_new_exam_id is null or v_new_question_id is null then
+    raise exception 'Admin course, lesson and exam creation failed.';
+  end if;
+  perform * from public.portal_admin_update_course(
+    v_new_course_id,'Updated Admin Course','Updated description','Intermediate',0,'NGN',false
+  );
+
+  if (select count(*) from public.portal_admin_list_courses()) <> 2 then
+    raise exception 'Admin course list should include active and inactive courses.';
+  end if;
+  if (select count(*) from public.admin_audit_logs) < 6 then
+    raise exception 'Admin mutations must write audit log entries.';
+  end if;
+
+  -- A student must not receive any admin overview rows.
+  perform set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
+  if (select count(*) from public.portal_admin_overview()) <> 0 then
+    raise exception 'Student account unexpectedly received admin overview data.';
   end if;
 
   -- A trusted admin must not use student-only enrolment functions.
