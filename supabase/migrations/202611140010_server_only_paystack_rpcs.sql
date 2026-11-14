@@ -1,4 +1,34 @@
 -- Server-only Paystack payment preparation and confirmation.
+-- Student can read only their own current enrolment status and stored course fee.
+create or replace function public.portal_get_my_course_enrollment(p_course_id uuid)
+returns table (
+  enrollment_id uuid,
+  status text,
+  fee_amount numeric,
+  fee_currency text
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $fn$
+  select e.id, e.status, c.fee_amount, c.fee_currency
+  from public.enrollments as e
+  join public.courses as c on c.id = e.course_id and c.active = true
+  join private.user_roles as ur on ur.user_id = auth.uid() and ur.role = 'student'
+  where e.course_id = p_course_id
+    and e.user_id = auth.uid()
+    and auth.uid() is not null
+  limit 1
+$fn$;
+
+revoke all on function public.portal_get_my_course_enrollment(uuid) from public, anon;
+grant execute on function public.portal_get_my_course_enrollment(uuid) to authenticated;
+
+comment on function public.portal_get_my_course_enrollment(uuid) is
+  'Returns only the authenticated student enrolment ID/status and stored course fee, for secure payment initialization.';
+
+
 -- Only a trusted Edge Function using service_role may execute these RPCs.
 create unique index if not exists paystack_one_pending_per_enrollment
   on public.paystack_payments(enrolment_id)
