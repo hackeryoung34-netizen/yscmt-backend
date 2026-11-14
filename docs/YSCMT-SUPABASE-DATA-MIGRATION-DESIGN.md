@@ -94,3 +94,20 @@ The destination may normalize `student_profiles` into `user_profiles`, but all e
 - No user records, payments, passwords, or files have been exported or imported.
 - No production domain routing, DNS, or Vercel production deployment has been changed.
 - This document is a design record only. The next implementation artifact is a complete SQL migration with RLS policies and server-only boundaries, reviewed against every source API route before applying it.
+
+
+## 7. API behavior review — critical server-side operations
+
+A read-only review of representative Hatchable handlers confirms that the replacement must not rely on direct browser table writes for these workflows:
+
+- Exams: `api/student/exam.js` returns question text/options but not correct options; submission calculates score from stored answer keys and checks an active exam session and elapsed time. The replacement must keep answer keys server-only and make session submission atomic/idempotent.
+- Exam start: `api/student/exam-start.js` checks active exam, approved/completed enrolment, and presence of questions before creating a session. Enforce one-time session ownership and server-side expiry.
+- Paystack initialization: `api/student/paystack/initialize.js` derives amount/currency from the stored course fee, validates enrolment ownership/status, creates a server-side reference, and uses secret credentials. Never accept amount or payment status from the browser.
+- Paystack verification: `api/student/paystack/verify.js` checks exact reference, amount, currency, payment domain and status with Paystack before approving enrolment. Rebuild with idempotent transactions and server-only credentials.
+- Paystack webhook: `api/paystack/webhook.js` verifies the signed raw body and confirms the payment with Paystack. Preserve signature verification, replay tolerance, idempotency, and reconciliation before granting course access.
+- Admin payments: `api/admin/payments.js` includes bank-transfer account details, receipt links, and payment review. Keep account numbers and receipt files behind staff authorization; expose only explicitly intended public payment instructions.
+- Student enrolment: `api/student/enrol.js` checks the active course and configured fee, then creates/reopens a pending enrolment. Enforce a unique user/course pair and do not let students set approved/completed status.
+- Certificates: `api/student/certificates.js` checks approved enrolment, lesson completion, and a passing active exam before issuing a certificate. Make issuance server-side and idempotent; keep public verification limited to safe certificate details.
+- Admin student list: `api/admin/students.js` reads contact details and enrolment counts. Restrict this endpoint to trusted admin role and audit access where appropriate.
+
+These handlers were inspected as source code only. No API or database behavior was changed.
