@@ -1,7 +1,7 @@
 # YSCMT Independent Portal Migration Plan
 
-Status: discovery completed; migration not yet performed.
-Target working setup: GitHub Codespaces (phone-accessible development), Supabase (database/auth), Vercel (web hosting).
+Status: schema foundation and no-VPS portal preview implemented; data migration and production cutover remain gated.
+Target working setup: Vercel static hosting + Supabase Auth/Postgres/RPC + GitHub CI. A privately purchased VPS is not required for the initial portal.
 The Hatchable portal remains live as the rollback source until the replacement is verified.
 
 ## 1. Current source inventory
@@ -78,15 +78,19 @@ Before any public deployment:
 9. Test on a preview domain first. Switch the production domain only after explicit approval.
 10. Keep Hatchable available for rollback until the new system has passed acceptance testing.
 
-## 5. Current external service status observed
+## 5. Current external service status (2026-11-14)
 
-- Supabase connector currently lists no projects.
-- Vercel project "yscmtenterprise" exists and has the intended domain names attached.
-- The Vercel project reports SSO protection enabled for non-custom domains; verify access settings before preview testing.
-- No DNS changes, production deploys, Hatchable edits, or data writes were made during discovery.
+- Supabase organization `Community`; project `YSCMT-Student-Portal` is ACTIVE_HEALTHY in `eu-west-3` on the Free plan.
+- Supabase migrations 001–004 are applied: 19 public tables and 3 private tables, all 22 with RLS enabled. Browser access to business tables remains denied by default.
+- Supabase migrations 005–008 (identity, course reads, pending enrolment, lesson progress) are committed to GitHub but not applied.
+- Vercel project `yscmtenterprise` has the intended production domains. A separate preview branch `migration/student-portal-preview` has a READY deployment and GitHub static checks pass.
+- Vercel SSO protection remains enabled for non-custom preview domains.
+- No VPS has been purchased. No production DNS/routing, main website, Hatchable portal, Auth users, or source data have been changed/imported.
 
 ## 6. Next gated actions
 
-- Confirm the Supabase organization and accept any quoted project cost before creating a database project.
-- Create a separate migration/staging branch and preview environment.
+- Review and explicitly approve the staged RPC migrations before applying them to Supabase.
+- Test Auth profile creation only with a disposable account after approval.
+- Complete exam, payment, certificate, progress and admin workflows, then reconcile source data.
 - Do not expose service-role keys, Paystack secret keys, passwords, or private keys in chat or frontend code.
+- Keep all paid upgrades and production cutover behind explicit user approval.
