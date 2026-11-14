@@ -4,8 +4,11 @@ from uuid import UUID
 
 from django.test import SimpleTestCase, override_settings
 from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.test import APIRequestFactory
 
 from .portal_auth import SupabasePortalAuthentication, PortalPrincipal
+from .portal_permissions import IsPortalAdmin, IsPortalStudent
+from .portal_views import PortalMeAPIView
 
 
 @override_settings(
@@ -69,3 +72,41 @@ class SupabasePortalAuthenticationTests(SimpleTestCase):
     def test_missing_header_is_anonymous(self):
         self.request.headers = {}
         self.assertIsNone(self.auth.authenticate(self.request))
+
+    @patch("accounts.portal_auth.requests.post")
+    def test_portal_me_endpoint_returns_only_verified_identity(self, post):
+        response = Mock()
+        response.status_code = 200
+        response.raw.read.return_value = json.dumps([{
+            "user_id": "7e3f65a2-72e9-4f0f-9a93-4e7d5b123456",
+            "email": "student@example.com",
+            "role": "student",
+            "full_name": "Test Student",
+            "phone": "+2348000000000",
+        }]).encode()
+        post.return_value = response
+
+        request = APIRequestFactory().get(
+            "/api/portal/v1/me/",
+            HTTP_AUTHORIZATION="Bearer test-user-token",
+        )
+        result = PortalMeAPIView.as_view()(request)
+
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.data["role"], "student")
+        self.assertEqual(result.data["email"], "student@example.com")
+        self.assertNotIn("password", result.data)
+        self.assertNotIn("access_token", result.data)
+
+    def test_student_role_cannot_access_admin_permission(self):
+        principal = PortalPrincipal(
+            id=UUID("7e3f65a2-72e9-4f0f-9a93-4e7d5b123456"),
+            email="student@example.com",
+            role="student",
+            full_name="Test Student",
+            phone="",
+        )
+        request = Mock()
+        request.user = principal
+        self.assertTrue(IsPortalStudent().has_permission(request, None))
+        self.assertFalse(IsPortalAdmin().has_permission(request, None))
