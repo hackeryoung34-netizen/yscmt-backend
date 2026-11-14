@@ -160,7 +160,7 @@ begin
   end if;
 
   select * into v_payment
-  from public.portal_confirm_paystack_payment(v_reference,100000,'NGN',v_gateway);
+  from public.portal_confirm_paystack_payment(auth.uid(),v_reference,100000,'NGN',v_gateway);
   if v_payment.status <> 'success' then
     raise exception 'Repeated Paystack confirmation must be idempotent.';
   end if;
