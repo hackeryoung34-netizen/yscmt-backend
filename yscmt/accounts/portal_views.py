@@ -1,5 +1,7 @@
 """Views reserved for the independent YSCMT Student Portal API."""
-from rest_framework.exceptions import NotFound
+from uuid import UUID
+
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -63,3 +65,24 @@ class PortalCourseLessonsAPIView(PortalStudentAPIView):
             {"p_course_id": str(course_id)},
         )
         return Response({"results": rows})
+
+
+class PortalEnrollmentCreateAPIView(PortalStudentAPIView):
+    """Create a pending enrolment for the authenticated student only."""
+
+    def post(self, request):
+        if not isinstance(request.data, dict):
+            raise ValidationError({"course_id": "A course UUID is required."})
+        try:
+            course_id = UUID(str(request.data.get("course_id")))
+        except (TypeError, ValueError, AttributeError) as exc:
+            raise ValidationError({"course_id": "A valid course UUID is required."}) from exc
+
+        rows = call_portal_rpc(
+            request,
+            "portal_create_enrollment",
+            {"p_course_id": str(course_id)},
+        )
+        if not rows:
+            raise NotFound("Active course not found.")
+        return Response(rows[0], status=201)
