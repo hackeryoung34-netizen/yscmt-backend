@@ -104,6 +104,7 @@ function sanitizedGatewayResponse(data: Record<string, unknown>) {
     paid_at: data.paid_at ?? null,
     channel: data.channel ?? null,
     transaction_date: data.transaction_date ?? null,
+    transaction_id: data.id ?? null,
     fees: data.fees ?? null,
     customer_email: (data.customer as Record<string, unknown> | undefined)?.email ?? null,
   };
