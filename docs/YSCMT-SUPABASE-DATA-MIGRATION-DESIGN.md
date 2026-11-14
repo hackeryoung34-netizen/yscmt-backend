@@ -92,10 +92,10 @@ The destination may normalize `student_profiles` into `user_profiles`, but all e
 - Supabase project is ACTIVE_HEALTHY. The target has 19 public application tables and 3 private tables; all 22 have RLS enabled.
 - Hatchable remains ACTIVE with 21 source tables and 31 API routes.
 - The initial schema, private-table protections, Auth profile/role registry, and legacy teacher-reply compatibility migrations (001–004) have been applied and verified.
-- RPC migrations 005 (identity), 006 (student course reads), and 007 (student pending enrolment) are committed to the migration branch but have NOT been applied to Supabase.
+- RPC migrations 005 (identity), 006 (student course reads), 007 (student pending enrolment), and 008 (student lesson progress) are committed to the migration branch but have NOT been applied to Supabase.
 - No user records, payments, passwords, receipt files, or Auth accounts have been exported or imported.
 - No production domain routing, DNS, Vercel production deployment, or Hatchable changes have been made.
-- The next gates are review/apply of the staged RPC migrations in a controlled test environment, disposable-account testing after approval, and completion of progress/exam/payment/certificate/admin workflows before preview deployment.
+- The no-VPS Vercel + Supabase preview UI is deployed and static checks pass. The next gates are review/apply of staged RPC migrations in a controlled test environment, disposable-account testing after approval, and completion of exam/payment/certificate/admin workflows before production cutover.
 
 
 ## 7. API behavior review — critical server-side operations
