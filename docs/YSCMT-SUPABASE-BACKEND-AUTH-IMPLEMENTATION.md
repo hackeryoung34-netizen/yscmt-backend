@@ -144,3 +144,17 @@ The Supabase service-role/secret key is not needed for this identity lookup. If 
 ## Current progress
 
 The Supabase schema and deny-by-default RLS baseline have been applied and verified separately. Migration 005 is committed to this branch but has not been applied to Supabase. The isolated Django identity adapter, role permissions, portal identity endpoint, student course list/detail/lesson endpoints, narrow Supabase RPC migration 006, and mocked tests are committed. Additional tests for upstream failures, oversized/malformed payloads, expired tokens, and instructor/admin separation were added in commit 708735239d4332d65984875adbd527766997f7a9. The mocked tests have not yet been executed in CI. Migration 006 has not been applied to Supabase, so course endpoints are code-complete but not operational against the destination database yet. No source rows, Auth users, payment records, receipt files, or secrets have been imported. Nothing in this work is deployed or live.
+
+
+## Student self-service enrolment API — implementation added, not deployed
+
+- `POST /api/portal/v1/enrollments/` accepts a `course_id` only.
+- The backend validates the UUID and calls the allow-listed `portal_create_enrollment` RPC.
+- The database derives the student from `auth.uid()`, verifies the trusted `student` role and active course, and inserts status `pending`.
+- The client cannot supply a user ID or approval status. The existing unique constraint prevents a second enrolment for the same student/course.
+- Duplicate enrolment is surfaced as HTTP 409; missing/inactive course as HTTP 404; non-student role as HTTP 403.
+- Staff approval remains intentionally unimplemented and must be a separate admin-only, audited operation.
+
+Migration `202611140007_student_enrollment_create_rpc.sql` is committed to the migration branch only. It has **not** been applied to Supabase. The new API endpoint is therefore not operational against the destination until that migration is separately reviewed and approved.
+
+A GitHub Actions workflow was added to run the isolated Django portal auth/API test module on pushes and pull requests. Check its run result before treating the code as validated.
