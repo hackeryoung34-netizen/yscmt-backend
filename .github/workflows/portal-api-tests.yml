@@ -75,7 +75,7 @@ jobs:
             cat "$migration" | docker exec -i "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d yscmt_test
           done
       - name: Run Supabase RPC integration tests
-        run: cat supabase/tests/portal_rpc_integration.sql | docker exec -i "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d yscmt_test
+        run: echo "Running portal SQL integration suite" && cat supabase/tests/portal_rpc_integration.sql | docker exec -i "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d yscmt_test
 
   paystack-edge-function-check:
     runs-on: ubuntu-latest
