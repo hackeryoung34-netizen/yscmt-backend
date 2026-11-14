@@ -4,6 +4,7 @@ create or replace function public.portal_get_my_identity()
 returns table (
   user_id uuid,
   role text,
+  email text,
   full_name text,
   phone text
 )
@@ -15,9 +16,12 @@ as $$
   select
     auth.uid(),
     ur.role,
+    au.email,
     coalesce(up.full_name, ''),
     coalesce(up.phone, '')
   from private.user_roles as ur
+  join auth.users as au
+    on au.id = ur.user_id
   left join public.user_profiles as up
     on up.user_id = ur.user_id
   where ur.user_id = auth.uid()
