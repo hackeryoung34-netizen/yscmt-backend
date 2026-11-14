@@ -135,3 +135,16 @@ Verification after apply:
 - No source rows, user accounts, payment records, secrets, or files have been imported.
 
 Important next steps before the frontend can use this schema: implement the trusted backend API, role provisioning, Auth account mapping/invitation workflow, and explicit tests for anonymous/student/instructor/admin access. Do not connect the existing React frontend directly to the business tables or publish any secret key.
+
+
+## 9. Supabase Auth bootstrap and role registry — applied 2026-11-14
+
+Migration `supabase/migrations/202611140003_auth_profiles_and_trusted_roles.sql` was applied to project `wzpkfjnymsxczbkiukrp`.
+
+- Added `private.user_roles`, with roles limited to `student`, `instructor`, and `admin`; new Auth accounts receive `student` by default.
+- Added an `auth.users` after-insert trigger that creates a minimal `public.user_profiles` row and the private default role row. It reads full_name/phone only as profile display data; it never uses user metadata for authorization.
+- The trigger function is in the non-exposed `private` schema, uses `SECURITY DEFINER` with an empty `search_path`, fully qualified table references, and execute privileges revoked from browser roles.
+- Browser roles have no access to the private role registry. Only the trusted server-side `service_role` has schema/table privileges; its secret must remain exclusively on the server. The role registry has RLS enabled and no browser policies.
+- Added updated_at triggers for profiles and roles.
+
+Catalog verification confirmed the Auth trigger and both timestamp triggers exist. A live signup test has intentionally not been run because it would create a real Auth account; this must be tested with a dedicated disposable test account before enabling registration. Supabase Security Advisor continues to report INFO-level no-policy notices for intentionally deny-by-default tables; no browser grants were added. The performance advisor reports unused indexes because the new schema has no workload yet; do not remove FK indexes before query patterns and real data exist.
