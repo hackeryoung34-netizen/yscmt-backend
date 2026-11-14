@@ -3,6 +3,7 @@
 create unique index if not exists paystack_one_pending_per_enrollment
   on public.paystack_payments(enrolment_id)
   where status = 'pending';
+
 create or replace function public.portal_prepare_paystack_payment(
   p_user_id uuid,
   p_enrollment_id uuid
@@ -17,7 +18,7 @@ returns table (
 language plpgsql
 security definer
 set search_path = ''
-as $function$
+as $fn$
 declare
   v_amount_kobo bigint;
   v_email text;
@@ -80,18 +81,35 @@ begin
     where id = v_payment.id and status = 'pending';
   end if;
 
-  v_reference := 'YSCMT_' || upper(replace(gen_random_uuid()::text, '-', ''));
+  v_reference := 'YSCMT_' || upper(replace(pg_catalog.gen_random_uuid()::text, '-', ''));
 
-  insert into public.paystack_payments (
-    enrolment_id, user_id, course_id, reference, amount_kobo, currency, status
-  )
-  select e.id, e.user_id, e.course_id, v_reference, v_amount_kobo, 'NGN', 'pending'
-  from public.enrollments as e
-  where e.id = p_enrollment_id and e.user_id = p_user_id;
+  begin
+    insert into public.paystack_payments (
+      enrolment_id, user_id, course_id, reference, amount_kobo, currency, status
+    )
+    select e.id, e.user_id, e.course_id, v_reference, v_amount_kobo, 'NGN', 'pending'
+    from public.enrollments as e
+    where e.id = p_enrollment_id and e.user_id = p_user_id;
+  exception when unique_violation then
+    select pp.* into v_payment
+    from public.paystack_payments as pp
+    where pp.enrolment_id = p_enrollment_id
+      and pp.user_id = p_user_id
+      and pp.status = 'pending'
+    order by pp.created_at desc
+    limit 1
+    for update;
+    if found then
+      return query select v_payment.reference, v_payment.amount_kobo,
+        v_payment.currency, v_email, v_payment.authorization_url;
+      return;
+    end if;
+    raise;
+  end;
 
   return query select v_reference, v_amount_kobo, 'NGN'::text, v_email, ''::text;
 end;
-$function$;
+$fn$;
 
 create or replace function public.portal_set_paystack_authorization_url(
   p_reference text,
@@ -101,7 +119,7 @@ returns boolean
 language plpgsql
 security definer
 set search_path = ''
-as $function$
+as $fn$
 declare
   v_updated integer;
 begin
@@ -122,7 +140,7 @@ begin
   end if;
   return true;
 end;
-$function$;
+$fn$;
 
 create or replace function public.portal_confirm_paystack_payment(
   p_user_id uuid,
@@ -140,7 +158,7 @@ returns table (
 language plpgsql
 security definer
 set search_path = ''
-as $function$
+as $fn$
 declare
   v_payment public.paystack_payments%rowtype;
   v_gateway_amount bigint;
@@ -153,11 +171,19 @@ begin
     raise exception using errcode = '22023', message = 'Invalid verified payment details.';
   end if;
 
-  if jsonb_typeof(p_gateway_response) <> 'object'
+  if jsonb_typeof(p_gateway_response) is distinct from 'object'
      or (p_gateway_response ->> 'status') is distinct from 'success'
      or (p_gateway_response ->> 'reference') is distinct from p_reference
      or (p_gateway_response ->> 'currency') is distinct from p_currency
-     or coalesce(p_gateway_response ->> 'amount', '') !~ '^[0-9]{1,18}
+     or coalesce(p_gateway_response ->> 'amount', '') !~ '^[0-9]{1,18}$' then
+    raise exception using errcode = '22023', message = 'Paystack verification payload does not match the payment.';
+  end if;
+
+  v_gateway_amount := (p_gateway_response ->> 'amount')::bigint;
+  if v_gateway_amount <> p_amount_kobo then
+    raise exception using errcode = '22023', message = 'Paystack amount does not match the verified payment.';
+  end if;
+
   select pp.* into v_payment
   from public.paystack_payments as pp
   where pp.reference = p_reference
@@ -209,78 +235,7 @@ begin
   return query select v_payment.id, v_payment.enrolment_id,
     'success'::text, v_verified_at;
 end;
-$function$;
-
-revoke all on function public.portal_prepare_paystack_payment(uuid, uuid) from public, anon, authenticated;
-revoke all on function public.portal_set_paystack_authorization_url(text, text) from public, anon, authenticated;
-revoke all on function public.portal_confirm_paystack_payment(uuid, text, bigint, text, jsonb) from public, anon, authenticated;
-grant execute on function public.portal_prepare_paystack_payment(uuid, uuid) to service_role;
-grant execute on function public.portal_set_paystack_authorization_url(text, text) to service_role;
-grant execute on function public.portal_confirm_paystack_payment(uuid, text, bigint, text, jsonb) to service_role;
-
-comment on function public.portal_prepare_paystack_payment(uuid, uuid) is
-  'Server-only: validates a pending student enrolment and derives the exact NGN amount from the stored course fee.';
-comment on function public.portal_set_paystack_authorization_url(text, text) is
-  'Server-only: stores a validated Paystack checkout URL for a pending payment reference.';
-comment on function public.portal_confirm_paystack_payment(uuid, text, bigint, text, jsonb) is
-  'Server-only: confirms an exact Paystack-verified amount/currency/reference and idempotently approves the enrolment.';
- then
-    raise exception using errcode = '22023', message = 'Paystack verification payload does not match the payment.';
-  end if;
-
-  v_gateway_amount := (p_gateway_response ->> 'amount')::bigint;
-  if v_gateway_amount <> p_amount_kobo then
-    raise exception using errcode = '22023', message = 'Paystack amount does not match the verified payment.';
-  end if;
-
-  select pp.* into v_payment
-  from public.paystack_payments as pp
-  where pp.reference = p_reference
-  for update;
-
-  if not found then
-    raise exception using errcode = 'P0002', message = 'Payment reference not found.';
-  end if;
-
-  if v_payment.amount_kobo <> p_amount_kobo or v_payment.currency <> p_currency then
-    raise exception using errcode = '22023', message = 'Verified amount or currency does not match the stored payment.';
-  end if;
-
-  if v_payment.status = 'success' then
-    return query select v_payment.id, v_payment.enrolment_id,
-      v_payment.status, v_payment.verified_at;
-    return;
-  end if;
-
-  if v_payment.status <> 'pending' then
-    raise exception using errcode = '22023', message = 'This payment is no longer pending.';
-  end if;
-
-  update public.paystack_payments
-  set status = 'success',
-      gateway_response = p_gateway_response,
-      verified_at = v_verified_at
-  where id = v_payment.id;
-
-  update public.enrollments
-  set status = 'approved'
-  where id = v_payment.enrolment_id
-    and user_id = v_payment.user_id
-    and status = 'pending';
-
-  if not found and not exists (
-    select 1 from public.enrollments as e
-    where e.id = v_payment.enrolment_id
-      and e.user_id = v_payment.user_id
-      and e.status in ('approved','completed')
-  ) then
-    raise exception using errcode = '22023', message = 'Enrolment is not eligible for payment approval.';
-  end if;
-
-  return query select v_payment.id, v_payment.enrolment_id,
-    'success'::text, v_verified_at;
-end;
-$function$;
+$fn$;
 
 revoke all on function public.portal_prepare_paystack_payment(uuid, uuid) from public, anon, authenticated;
 revoke all on function public.portal_set_paystack_authorization_url(text, text) from public, anon, authenticated;
