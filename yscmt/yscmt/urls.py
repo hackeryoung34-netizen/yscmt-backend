@@ -26,7 +26,10 @@ urlpatterns = [
 
     path("admin/", admin.site.urls),
 
-    # Authentication
+    # Independent Student Portal API (isolated from legacy Django auth)
+    path("api/portal/v1/", include("accounts.portal_urls")),
+
+    # Legacy authentication (preserved for existing consumers)
     path("api/auth/", include("accounts.urls")),
 
     # JWT Authentication
