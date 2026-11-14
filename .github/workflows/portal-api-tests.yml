@@ -63,22 +63,19 @@ jobs:
       PGHOST: localhost
       PGUSER: postgres
       PGDATABASE: yscmt_test
+      PG_CONTAINER: ${{ job.services.postgres.id }}
     steps:
       - uses: actions/checkout@v4
-      - name: Install PostgreSQL client
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client
       - name: Bootstrap isolated Supabase Auth test surface
-        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/portal_test_bootstrap.sql
+        run: cat supabase/tests/portal_test_bootstrap.sql | docker exec -i "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d yscmt_test
       - name: Apply all staged portal migrations to disposable PostgreSQL
         run: |
           for migration in supabase/migrations/*.sql; do
             echo "Applying $migration"
-            psql -v ON_ERROR_STOP=1 -f "$migration"
+            cat "$migration" | docker exec -i "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d yscmt_test
           done
       - name: Run Supabase RPC integration tests
-        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/portal_rpc_integration.sql
+        run: cat supabase/tests/portal_rpc_integration.sql | docker exec -i "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d yscmt_test
 
   paystack-edge-function-check:
     runs-on: ubuntu-latest
