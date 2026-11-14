@@ -92,7 +92,7 @@ The destination may normalize `student_profiles` into `user_profiles`, but all e
 - Supabase project is ACTIVE_HEALTHY. The target has 19 public application tables and 3 private tables; all 22 have RLS enabled.
 - Hatchable remains ACTIVE with 21 source tables and 31 API routes.
 - The initial schema, private-table protections, Auth profile/role registry, and legacy teacher-reply compatibility migrations (001–004) have been applied and verified.
-- RPC migrations 005 (identity), 006 (student course reads), 007 (student pending enrolment), 008 (student lesson progress), 009 (student timed exams), and 010 (server-only Paystack payment preparation/confirmation) are committed to the migration branch but have NOT been applied to Supabase.
+- RPC migrations 005 (identity), 006 (student course reads), 007 (student pending enrolment), 008 (student lesson progress), 009 (student timed exams), 010 (server-only Paystack payment preparation/confirmation), and 011 (student classroom, practice submissions, and certificate eligibility) are committed to the migration branch but have NOT been applied to Supabase.
 - No user records, payments, passwords, receipt files, or Auth accounts have been exported or imported.
 - No production domain routing, DNS, Vercel production deployment, or Hatchable changes have been made.
 - The no-VPS Vercel + Supabase preview UI includes student login, course/lesson views, enrolment requests, lesson completion/progress, and a timed exam interface. Static checks pass. The next gates are review/apply of staged RPC migrations in a controlled test environment, disposable-account testing after approval, and completion of payment/certificate/admin workflows before production cutover.
@@ -186,3 +186,11 @@ The initial aggregate privilege query counted the intentional authenticated prof
 - Only NGN course fees are currently enabled; amounts are converted to kobo server-side. Pending checkout references expire after 30 minutes and are unique per pending enrolment.
 - The `paystack-payment` Supabase Edge Function manually validates user JWTs for initialize/verify actions, uses the service-role key only server-side, checks Paystack test/live domain against the key prefix, verifies transactions directly with Paystack, validates raw-body HMAC-SHA512 webhooks, and stores only a sanitized gateway response.
 - The Edge Function and migration 010 are committed but not deployed/applied. No Paystack secret has been added to Supabase and no real/test payment has been initiated.
+
+
+## Classroom, practice and certificate RPCs (migration 011)
+
+- Enrolled students can list classroom sessions, join a session during its allowed time window, read the latest classroom messages/announcements/teacher replies, and post bounded text messages.
+- Students can submit practice work with bounded text and HTTPS project links, and list only their own submissions/reviewer notes.
+- Certificate creation is idempotent and requires an approved/completed enrolment, every active lesson completed, and at least one passed exam attempt. The current staged RPC creates a certificate verification record; PDF generation/private certificate file storage remains future work.
+- Migration 011 is staged only and has not been applied to Supabase.
