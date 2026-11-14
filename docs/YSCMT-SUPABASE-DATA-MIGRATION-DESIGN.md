@@ -1,6 +1,6 @@
 # YSCMT Student Portal — Supabase data and identity migration design
 
-Status: DESIGN ONLY — not applied to the Supabase database.
+Status: schema foundation applied; identity/course/enrolment RPC migrations remain staged for review.
 
 Project: `wzpkfjnymsxczbkiukrp` (YSCMT-Student-Portal, eu-west-3).
 Source: Hatchable project `proj_wtjM5VcpGROw`, currently ACTIVE.
@@ -89,11 +89,13 @@ The destination may normalize `student_profiles` into `user_profiles`, but all e
 
 ## 6. Current state and next gate
 
-- Supabase project is ACTIVE_HEALTHY; public schema currently has zero application tables.
-- Hatchable is ACTIVE with 21 tables and 31 API routes.
-- No user records, payments, passwords, or files have been exported or imported.
-- No production domain routing, DNS, or Vercel production deployment has been changed.
-- This document is a design record only. The next implementation artifact is a complete SQL migration with RLS policies and server-only boundaries, reviewed against every source API route before applying it.
+- Supabase project is ACTIVE_HEALTHY. The target has 19 public application tables and 3 private tables; all 22 have RLS enabled.
+- Hatchable remains ACTIVE with 21 source tables and 31 API routes.
+- The initial schema, private-table protections, Auth profile/role registry, and legacy teacher-reply compatibility migrations (001–004) have been applied and verified.
+- RPC migrations 005 (identity), 006 (student course reads), and 007 (student pending enrolment) are committed to the migration branch but have NOT been applied to Supabase.
+- No user records, payments, passwords, receipt files, or Auth accounts have been exported or imported.
+- No production domain routing, DNS, Vercel production deployment, or Hatchable changes have been made.
+- The next gates are review/apply of the staged RPC migrations in a controlled test environment, disposable-account testing after approval, and completion of progress/exam/payment/certificate/admin workflows before preview deployment.
 
 
 ## 7. API behavior review — critical server-side operations
