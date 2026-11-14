@@ -1,6 +1,6 @@
 # YSCMT Supabase-backed Django API: authentication implementation plan
 
-Status: design only; not deployed.
+Status: implementation in progress; not deployed.
 
 Branch: `migration/independent-portal`
 
