@@ -83,3 +83,10 @@ This document is a field-level plan only. No Hatchable data, user accounts, paym
 ## New exam-session linkage
 
 The target `exam_attempts.exam_session_id` is a migration-generated nullable foreign key added by migration 009, not a legacy Hatchable field. Imported historical attempts may leave it null; all newly submitted portal attempts bind to exactly one exam session and use a unique index to make session submission idempotent.
+
+
+## Payment field conversion and server-generated values
+
+- Legacy Paystack transaction records map to `public.paystack_payments`; the new `reference`, `amount_kobo`, `currency`, and `exam_session_id` values are generated/validated by the new portal workflow.
+- The current Paystack Edge Function supports NGN only and derives kobo amount from the stored `courses.fee_amount`; it never accepts a payment amount from the browser.
+- Payment verification and webhook reconciliation are server-only; historical transaction rows must be reconciled against Paystack before enrolment approval is migrated.
