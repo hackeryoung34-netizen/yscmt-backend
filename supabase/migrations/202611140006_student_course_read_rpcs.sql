@@ -76,7 +76,7 @@ as $function$
       where ur.user_id = auth.uid()
         and ur.role = 'student'
     )
-$$;
+$function$;
 
 create or replace function public.portal_get_course_lessons(p_course_id uuid)
 returns table (
