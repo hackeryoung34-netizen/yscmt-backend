@@ -1,6 +1,6 @@
 # YSCMT Hatchable → Supabase source/target field map
 
-Status: mapping specification only. No Hatchable rows or Auth accounts have been copied.
+Status: field-level mapping specification; target schema foundation is applied, but no Hatchable rows or Auth accounts have been copied.
 
 Source project: `YSCMT Student Portal` (`proj_wtjM5VcpGROw`)
 Destination: Supabase project `wzpkfjnymsxczbkiukrp`
