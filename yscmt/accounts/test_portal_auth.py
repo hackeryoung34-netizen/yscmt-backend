@@ -103,6 +103,63 @@ class SupabasePortalAuthenticationTests(SimpleTestCase):
         result = PortalMeAPIView.as_view()(request)
         self.assertEqual(result.status_code, 401)
 
+    @patch("accounts.portal_auth.requests.post")
+    def test_identity_service_error_fails_closed(self, post):
+        response = Mock()
+        response.status_code = 500
+        response.raw.read.return_value = b'{"error":"internal"}'
+        post.return_value = response
+
+        from .portal_auth import IdentityServiceUnavailable
+        with self.assertRaises(IdentityServiceUnavailable):
+            self.auth.authenticate(self.request)
+        response.close.assert_called_once()
+
+    @patch("accounts.portal_auth.requests.post")
+    def test_oversized_identity_response_fails_closed(self, post):
+        response = Mock()
+        response.status_code = 200
+        response.raw.read.return_value = b"x" * (self.auth.max_response_bytes + 1)
+        post.return_value = response
+
+        from .portal_auth import IdentityServiceUnavailable
+        with self.assertRaises(IdentityServiceUnavailable):
+            self.auth.authenticate(self.request)
+        response.close.assert_called_once()
+
+    @patch("accounts.portal_auth.requests.post")
+    def test_malformed_identity_payload_fails_closed(self, post):
+        response = Mock()
+        response.status_code = 200
+        response.raw.read.return_value = b"not-json"
+        post.return_value = response
+
+        from .portal_auth import IdentityServiceUnavailable
+        with self.assertRaises(IdentityServiceUnavailable):
+            self.auth.authenticate(self.request)
+
+    @patch("accounts.portal_auth.requests.post")
+    def test_expired_token_is_rejected(self, post):
+        response = Mock()
+        response.status_code = 401
+        response.raw.read.return_value = b"{}"
+        post.return_value = response
+
+        with self.assertRaises(AuthenticationFailed):
+            self.auth.authenticate(self.request)
+
+    def test_instructor_role_cannot_access_admin_permission(self):
+        principal = PortalPrincipal(
+            id=UUID("7e3f65a2-72e9-4f0f-9a93-4e7d5b123456"),
+            email="instructor@example.com",
+            role="instructor",
+            full_name="Test Instructor",
+            phone="",
+        )
+        request = Mock()
+        request.user = principal
+        self.assertFalse(IsPortalAdmin().has_permission(request, None))
+
     def test_student_role_cannot_access_admin_permission(self):
         principal = PortalPrincipal(
             id=UUID("7e3f65a2-72e9-4f0f-9a93-4e7d5b123456"),
