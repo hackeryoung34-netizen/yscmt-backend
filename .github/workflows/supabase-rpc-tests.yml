@@ -1,0 +1,57 @@
+name: Supabase portal RPC integration tests
+
+on:
+  push:
+    branches: [migration/independent-portal]
+    paths:
+      - "supabase/migrations/**"
+      - "supabase/tests/**"
+      - ".github/workflows/supabase-rpc-tests.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "supabase/migrations/**"
+      - "supabase/tests/**"
+      - ".github/workflows/supabase-rpc-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: yscmt_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d yscmt_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGPASSWORD: postgres
+      PGHOST: localhost
+      PGUSER: postgres
+      PGDATABASE: yscmt_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+      - name: Bootstrap isolated Supabase Auth test surface
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/portal_test_bootstrap.sql
+      - name: Apply migrations to disposable PostgreSQL
+        run: |
+          for migration in supabase/migrations/*.sql; do
+            echo "Applying $migration"
+            psql -v ON_ERROR_STOP=1 -f "$migration"
+          done
+      - name: Run portal RPC integration tests
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/portal_rpc_integration.sql
