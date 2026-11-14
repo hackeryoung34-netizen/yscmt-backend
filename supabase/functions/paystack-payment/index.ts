@@ -10,7 +10,7 @@ const PAYSTACK_EXPECTED_DOMAIN = Deno.env.get("PAYSTACK_EXPECTED_DOMAIN") ?? "";
 const configuredOrigins = (Deno.env.get("PORTAL_ALLOWED_ORIGINS") ?? [
   "https://yscmtenterprise.ng",
   "https://www.yscmtenterprise.ng",
-  "https://yscmtenterprise-ktfuaey93-yscmtonlines-projects.vercel.app",
+  "https://yscmtenterprise-git-migration-stud-474718-yscmtonlines-projects.vercel.app",
 ].join(",")).split(",").map((origin) => origin.trim()).filter(Boolean);
 const allowedOrigins = new Set(configuredOrigins);
 
