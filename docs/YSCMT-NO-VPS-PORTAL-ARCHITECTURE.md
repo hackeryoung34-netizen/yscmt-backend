@@ -36,7 +36,7 @@ The portal is a static frontend and the data/authentication services are managed
 3. Expose only reviewed RPC functions; use `auth.uid()` and trusted private roles, never user-editable metadata.
 4. Keep student registration disabled in the preview until the Auth trigger is tested with an approved disposable account.
 5. Keep the admin route closed unless the private role RPC confirms `admin`.
-6. Keep exam answer keys, Paystack secrets, payment verification, and certificate issuance server-side.
+6. Keep exam answer keys, Paystack secrets, payment verification, and certificate issuance server-side. Paystack initialization, verification and signed webhook handling are staged as a Supabase Edge Function; it is not deployed until the payment migration and test secrets are approved.
 7. Do not import real users, passwords, payment records, receipts, or certificates until mapping and reconciliation are approved.
 8. Keep Hatchable online for rollback until full parity and acceptance testing.
 9. Do not change the production domain rewrite or main website until explicit approval.
