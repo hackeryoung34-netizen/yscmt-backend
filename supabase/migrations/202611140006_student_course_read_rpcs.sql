@@ -37,7 +37,8 @@ as $$
         and ur.role = 'student'
     )
   order by c.created_at desc, c.title asc
-$$;
+  limit 100
+$;
 
 create or replace function public.portal_get_course_detail(p_course_id uuid)
 returns table (
@@ -116,7 +117,8 @@ as $$
     and l.active = true
     and auth.uid() is not null
   order by l.sort_order asc, l.created_at asc
-$$;
+  limit 100
+$;
 
 revoke all on function public.portal_list_courses() from public, anon;
 revoke all on function public.portal_get_course_detail(uuid) from public, anon;
