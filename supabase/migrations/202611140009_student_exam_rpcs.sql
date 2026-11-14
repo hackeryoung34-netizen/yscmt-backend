@@ -74,7 +74,7 @@ begin
     and e.status in ('approved', 'completed')
   where ce.id = p_exam_id
     and ce.active = true
-    and exists (select 1 from public.exam_questions as q where q.exam_id = ce.id);
+    and (select count(*) from public.exam_questions as q where q.exam_id = ce.id) between 1 and 100;
 
   if not found then
     raise exception using errcode = 'P0002', message = 'Active exam not found for an approved enrolment.';
@@ -181,7 +181,8 @@ begin
     raise exception using errcode = '42501', message = 'Authentication is required.';
   end if;
 
-  if p_answers is null or jsonb_typeof(p_answers) <> 'object' then
+  if p_answers is null or jsonb_typeof(p_answers) <> 'object'
+     or octet_length(p_answers::text) > 65536 then
     raise exception using errcode = '22023', message = 'Answers must be a JSON object.';
   end if;
 
