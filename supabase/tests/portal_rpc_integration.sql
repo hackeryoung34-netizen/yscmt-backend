@@ -68,6 +68,40 @@ values
   2
 );
 
+insert into public.classroom_sessions (
+  id,course_id,title,description,meeting_url,starts_at,ends_at,status,created_by
+) values (
+  '60000000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000001',
+  'Test live classroom',
+  'Integration test session',
+  'https://meet.example.test/yscmt',
+  now() - interval '1 minute',
+  now() + interval '1 hour',
+  'live',
+  '10000000-0000-4000-8000-000000000002'
+);
+
+insert into public.classroom_announcements (
+  id,course_id,title,body,published,created_by
+) values (
+  '61000000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000001',
+  'Test announcement',
+  'Classroom test announcement',
+  true,
+  '10000000-0000-4000-8000-000000000002'
+);
+
+insert into public.classroom_teacher_replies (
+  id,course_id,created_by,message
+) values (
+  '62000000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000001',
+  '10000000-0000-4000-8000-000000000002',
+  'Test teacher reply'
+);
+
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
 
 do $tests$
@@ -83,6 +117,10 @@ declare
   v_attempt record;
   v_attempt_again record;
   v_payment record;
+  v_classroom_session_id uuid;
+  v_attendance_id uuid;
+  v_certificate_id uuid;
+  v_practice_id uuid;
   v_reference text;
   v_gateway jsonb;
 begin
@@ -200,6 +238,48 @@ begin
     raise exception 'Lesson progress summary is incorrect.';
   end if;
 
+  begin
+    perform * from public.portal_request_certificate('20000000-0000-4000-8000-000000000001');
+    raise exception 'Certificate must not be issued before an exam is passed.';
+  exception when sqlstate '22023' then
+    null;
+  end;
+
+  select id into v_classroom_session_id
+  from public.portal_list_classroom_sessions('20000000-0000-4000-8000-000000000001')
+  limit 1;
+  if v_classroom_session_id <> '60000000-0000-4000-8000-000000000001' then
+    raise exception 'Approved student should see the classroom session.';
+  end if;
+
+  select attendance_id into v_attendance_id
+  from public.portal_join_classroom_session(v_classroom_session_id);
+  if v_attendance_id is null then raise exception 'Classroom attendance was not created.'; end if;
+
+  if (select count(*) from public.portal_list_classroom_announcements('20000000-0000-4000-8000-000000000001')) <> 1 then
+    raise exception 'Course announcement should be visible to the enrolled student.';
+  end if;
+  if (select count(*) from public.portal_list_teacher_replies('20000000-0000-4000-8000-000000000001')) <> 1 then
+    raise exception 'Teacher reply should be visible to the enrolled student.';
+  end if;
+
+  perform * from public.portal_send_classroom_message(
+    '20000000-0000-4000-8000-000000000001',
+    'Hello from the integration test'
+  );
+  if (select count(*) from public.portal_list_classroom_messages('20000000-0000-4000-8000-000000000001')) <> 1 then
+    raise exception 'Student classroom message was not returned.';
+  end if;
+
+  select id into v_practice_id
+  from public.portal_submit_practice(
+    'lab-001','Practice test','Submitted practice content','https://example.test/project'
+  );
+  if v_practice_id is null then raise exception 'Practice submission was not created.'; end if;
+  if (select count(*) from public.portal_list_my_practice_submissions()) <> 1 then
+    raise exception 'Student practice submission was not returned.';
+  end if;
+
   select count(*) into v_count
   from public.portal_list_course_exams('20000000-0000-4000-8000-000000000001');
   if v_count <> 1 then raise exception 'Approved student should see the active exam.'; end if;
@@ -231,6 +311,16 @@ begin
   from public.portal_submit_exam(v_session,'{}'::jsonb);
   if v_attempt_again.attempt_id <> v_attempt.attempt_id then
     raise exception 'Repeated submission must return the same attempt.';
+  end if;
+
+  select id into v_certificate_id
+  from public.portal_request_certificate('20000000-0000-4000-8000-000000000001');
+  if v_certificate_id is null then raise exception 'Eligible student certificate was not issued.'; end if;
+  if (select count(*) from public.portal_list_my_certificates()) <> 1 then
+    raise exception 'Student certificate was not returned.';
+  end if;
+  if (select id from public.portal_request_certificate('20000000-0000-4000-8000-000000000001')) <> v_certificate_id then
+    raise exception 'Certificate request must be idempotent.';
   end if;
 
   -- A trusted admin must not use student-only enrolment functions.
