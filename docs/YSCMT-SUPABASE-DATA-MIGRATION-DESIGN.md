@@ -168,3 +168,13 @@ Still no source records, Auth users, payment records, files, or settings have be
 After migration 004, catalog checks confirmed 19 public tables and 3 private tables, with RLS enabled on all 22. A privilege audit returned no unexpected browser SELECT grants: the only intended browser-readable table is `public.user_profiles`, constrained by self-only RLS policies; all other application/private tables deny anon/authenticated SELECT. The health advisor returned no findings.
 
 The initial aggregate privilege query counted the intentional authenticated profile SELECT as a nonzero result; a second query excluded that expected self-profile access and returned zero unexpected browser SELECT grants. No data import or live-domain change has occurred.
+
+
+## Exam RPC design (migration 009)
+
+- `portal_list_course_exams` lists active exam metadata only for a student with approved/completed enrolment.
+- `portal_start_exam` creates or resumes one active timed session per student/exam. Exams without questions or with more than 100 questions are not startable.
+- `portal_get_exam_questions` returns only question IDs, text, options and order; it never returns `correct_option`.
+- `portal_submit_exam` validates a complete answer map, bounds the JSON payload, scores inside Postgres, records one attempt per session, and returns the same attempt on a repeated submission.
+- Historical imported attempts may have no `exam_session_id`; new portal attempts use it for idempotency.
+- Migration 009 remains staged and unapplied. Integration-test execution is not yet confirmed.
