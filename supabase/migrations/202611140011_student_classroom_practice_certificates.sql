@@ -143,10 +143,9 @@ begin
   end if;
 
   return query
-  insert into public.classroom_messages (course_id,user_id,author_role,message)
+  insert into public.classroom_messages as cm (course_id,user_id,author_role,message)
   values (p_course_id,v_user_id,'student',trim(p_message))
-  returning public.classroom_messages.id, public.classroom_messages.message,
-    public.classroom_messages.created_at;
+  returning cm.id, cm.message, cm.created_at;
 end;
 $fn$;
 
@@ -250,14 +249,13 @@ begin
   end if;
 
   return query
-  insert into public.practice_submissions (
+  insert into public.practice_submissions as ps (
     user_id,lab_key,title,submission_text,project_url,status
   )
   values (
     v_user_id,trim(p_lab_key),trim(p_title),coalesce(p_submission_text,''),coalesce(p_project_url,''),'submitted'
   )
-  returning public.practice_submissions.id, public.practice_submissions.status,
-    public.practice_submissions.submitted_at;
+  returning ps.id, ps.status, ps.submitted_at;
 end;
 $fn$;
 
