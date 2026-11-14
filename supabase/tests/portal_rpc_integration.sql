@@ -119,6 +119,9 @@ begin
   if not has_function_privilege('service_role','public.portal_prepare_paystack_payment(uuid,uuid)','EXECUTE') then
     raise exception 'Service role must be able to prepare payments.';
   end if;
+  if has_function_privilege('authenticated','public.portal_confirm_paystack_payment(uuid,text,bigint,text,jsonb)','EXECUTE') then
+    raise exception 'Browser roles must not confirm Paystack payments.';
+  end if;
 
   select * into v_payment
   from public.portal_prepare_paystack_payment(
