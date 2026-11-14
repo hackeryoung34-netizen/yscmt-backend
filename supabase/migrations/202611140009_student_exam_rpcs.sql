@@ -72,7 +72,9 @@ begin
   join public.enrollments as e on e.course_id = c.id
     and e.user_id = v_user_id
     and e.status in ('approved', 'completed')
-  where ce.id = p_exam_id and ce.active = true;
+  where ce.id = p_exam_id
+    and ce.active = true
+    and exists (select 1 from public.exam_questions as q where q.exam_id = ce.id);
 
   if not found then
     raise exception using errcode = 'P0002', message = 'Active exam not found for an approved enrolment.';
@@ -99,9 +101,9 @@ begin
   end if;
 
   begin
-    insert into public.exam_sessions (exam_id, user_id, started_at)
+    insert into public.exam_sessions as es (exam_id, user_id, started_at)
     values (p_exam_id, v_user_id, now())
-    returning id, public.exam_sessions.started_at
+    returning es.id, es.started_at
       into v_session_id, v_started_at;
   exception when unique_violation then
     select es.id, es.started_at
@@ -229,6 +231,7 @@ begin
   if not exists (
     select 1
     from public.course_exams as ce
+    join public.courses as c on c.id = ce.course_id and c.active = true
     join public.enrollments as e on e.course_id = ce.course_id
       and e.user_id = v_user_id
       and e.status in ('approved', 'completed')
