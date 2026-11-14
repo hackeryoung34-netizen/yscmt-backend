@@ -241,6 +241,20 @@ begin
     raise exception using errcode = '22023', message = 'This payment is no longer pending.';
   end if;
 
+  if not exists (
+    select 1
+    from public.enrollments as e
+    join public.courses as c on c.id = e.course_id and c.active = true
+    where e.id = v_payment.enrolment_id
+      and e.user_id = v_payment.user_id
+      and e.status = 'pending'
+      and c.fee_currency = p_currency
+      and round(c.fee_amount * 100)::bigint = p_amount_kobo
+  ) then
+    raise exception using errcode = '22023',
+      message = 'The current course fee or enrolment status no longer matches this payment.';
+  end if;
+
   update public.paystack_payments
   set status = 'success',
       gateway_response = p_gateway_response,
