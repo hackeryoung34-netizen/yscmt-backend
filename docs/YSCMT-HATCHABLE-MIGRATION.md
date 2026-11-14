@@ -82,7 +82,7 @@ Before any public deployment:
 
 - Supabase organization `Community`; project `YSCMT-Student-Portal` is ACTIVE_HEALTHY in `eu-west-3` on the Free plan.
 - Supabase migrations 001–004 are applied: 19 public tables and 3 private tables, all 22 with RLS enabled. Browser access to business tables remains denied by default.
-- Supabase migrations 005–010 (identity, course reads, pending enrolment, lesson progress, timed exams, Paystack payment) are committed to GitHub but not applied.
+- Supabase migrations 005–011 (identity, course reads, pending enrolment, lesson progress, timed exams, Paystack payment, classroom/practice/certificates) are committed to GitHub but not applied.
 - Vercel project `yscmtenterprise` has the intended production domains. A separate preview branch `migration/student-portal-preview` has a READY deployment and GitHub static checks pass.
 - Vercel SSO protection remains enabled for non-custom preview domains.
 - No VPS has been purchased. No production DNS/routing, main website, Hatchable portal, Auth users, or source data have been changed/imported.
@@ -91,6 +91,6 @@ Before any public deployment:
 
 - Review and explicitly approve the staged RPC migrations before applying them to Supabase.
 - Test Auth profile creation only with a disposable account after approval.
-- Complete payment, certificate and full admin workflows, then reconcile source data.
+- Complete payment activation/reconciliation and full admin workflows; classroom, practice and certificate student workflows are staged, then reconcile source data.
 - Do not expose service-role keys, Paystack secret keys, passwords, or private keys in chat or frontend code.
 - Keep all paid upgrades and production cutover behind explicit user approval.
