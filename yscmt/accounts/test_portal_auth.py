@@ -98,6 +98,11 @@ class SupabasePortalAuthenticationTests(SimpleTestCase):
         self.assertNotIn("password", result.data)
         self.assertNotIn("access_token", result.data)
 
+    def test_portal_me_endpoint_rejects_missing_token(self):
+        request = APIRequestFactory().get("/api/portal/v1/me/")
+        result = PortalMeAPIView.as_view()(request)
+        self.assertEqual(result.status_code, 401)
+
     def test_student_role_cannot_access_admin_permission(self):
         principal = PortalPrincipal(
             id=UUID("7e3f65a2-72e9-4f0f-9a93-4e7d5b123456"),
