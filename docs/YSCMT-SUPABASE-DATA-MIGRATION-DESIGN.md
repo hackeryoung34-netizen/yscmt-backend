@@ -148,3 +148,14 @@ Migration `supabase/migrations/202611140003_auth_profiles_and_trusted_roles.sql`
 - Added updated_at triggers for profiles and roles.
 
 Catalog verification confirmed the Auth trigger and both timestamp triggers exist. A live signup test has intentionally not been run because it would create a real Auth account; this must be tested with a dedicated disposable test account before enabling registration. Supabase Security Advisor continues to report INFO-level no-policy notices for intentionally deny-by-default tables; no browser grants were added. The performance advisor reports unused indexes because the new schema has no workload yet; do not remove FK indexes before query patterns and real data exist.
+
+
+## 10. Field-level source mapping and legacy creator handling — applied 2026-11-14
+
+Created `docs/YSCMT-HATCHABLE-SUPABASE-FIELD-MAPPING.md` with all 21 Hatchable source tables, exact source column names/types, destination mappings, user identity conversion, import order, and reconciliation gates.
+
+The source schema inspection confirmed that source ownership and several creator/reviewer columns are text, not UUID. All user-owned data must map through `private.legacy_user_map`. Non-user UUID primary keys should be preserved when imported so course/lesson/exam/enrolment relationships remain stable. Legacy creator literals such as `admin` cannot be treated as Auth UUIDs.
+
+To avoid inventing an identity for historical teacher replies, migration `supabase/migrations/202611140004_allow_unattributed_legacy_teacher_replies.sql` makes `classroom_teacher_replies.created_by` nullable. The reply remains preserved while its creator can remain unattributed if no genuine source user can be matched.
+
+Still no source records, Auth users, payment records, files, or settings have been imported.
