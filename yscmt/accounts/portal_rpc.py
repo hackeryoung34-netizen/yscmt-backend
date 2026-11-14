@@ -4,7 +4,13 @@ import json
 import requests
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
-from rest_framework.exceptions import APIException, AuthenticationFailed, PermissionDenied
+from rest_framework.exceptions import (
+    APIException,
+    AuthenticationFailed,
+    NotFound,
+    PermissionDenied,
+    ValidationError,
+)
 
 
 class PortalDataUnavailable(APIException):
@@ -13,12 +19,19 @@ class PortalDataUnavailable(APIException):
     default_code = "portal_data_unavailable"
 
 
+class EnrollmentConflict(APIException):
+    status_code = 409
+    default_detail = "An enrolment already exists for this course."
+    default_code = "enrollment_conflict"
+
+
 def call_portal_rpc(request, function_name, payload=None, max_response_bytes=1048576):
     """Call an allow-listed RPC using only the caller's Supabase access token."""
     allowed = {
         "portal_list_courses",
         "portal_get_course_detail",
         "portal_get_course_lessons",
+        "portal_create_enrollment",
     }
     if function_name not in allowed:
         raise ValueError("Unsupported portal RPC.")
@@ -53,6 +66,7 @@ def call_portal_rpc(request, function_name, payload=None, max_response_bytes=104
             stream=True,
         )
         body = response.raw.read(max_response_bytes + 1, decode_content=True)
+        status_code = response.status_code
     except requests.RequestException as exc:
         raise PortalDataUnavailable() from exc
     finally:
@@ -61,11 +75,17 @@ def call_portal_rpc(request, function_name, payload=None, max_response_bytes=104
 
     if len(body) > max_response_bytes:
         raise PortalDataUnavailable("Portal data service returned an oversized response.")
-    if response.status_code == 401:
+    if status_code == 401:
         raise AuthenticationFailed("Invalid or expired Supabase session.")
-    if response.status_code == 403:
+    if status_code == 403:
         raise PermissionDenied("This account cannot access the requested portal data.")
-    if response.status_code != 200:
+    if status_code == 404:
+        raise NotFound("The requested portal resource was not found.")
+    if status_code == 409:
+        raise EnrollmentConflict()
+    if status_code == 400:
+        raise ValidationError("The portal request could not be processed.")
+    if status_code != 200:
         raise PortalDataUnavailable()
 
     try:
