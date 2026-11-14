@@ -158,3 +158,11 @@ The Supabase schema and deny-by-default RLS baseline have been applied and verif
 Migration `202611140007_student_enrollment_create_rpc.sql` is committed to the migration branch only. It has **not** been applied to Supabase. The new API endpoint is therefore not operational against the destination until that migration is separately reviewed and approved.
 
 A GitHub Actions workflow was added to run the isolated Django portal auth/API test module on pushes and pull requests. Check its run result before treating the code as validated.
+
+
+## Student learning and assessment RPCs staged (not deployed)
+
+- Migration 008 adds self-scoped lesson completion and course progress summary functions. Completion is idempotent and requires an active lesson plus approved/completed enrolment.
+- Migration 009 adds active exam catalogue, timed exam sessions, question delivery without `correct_option`, server-side scoring, and idempotent submission per exam session. It bounds exams to 100 questions and answer payloads to 64 KiB.
+- The Student Portal preview UI now includes lesson completion/progress and a timed exam flow. The database RPC migrations remain unapplied; these controls will remain unavailable until the migrations are reviewed and explicitly approved.
+- A disposable PostgreSQL integration-test harness and GitHub Actions workflow were added to apply migrations 001–009 and exercise student enrolment, progress, exam timing/scoring, answer-key isolation, and browser table-access restrictions. Its run result must be checked before treating the SQL as validated.
