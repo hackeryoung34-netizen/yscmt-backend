@@ -102,9 +102,8 @@ class SupabasePortalAuthentication(BaseAuthentication):
             raise IdentityServiceUnavailable()
 
         try:
-            rows = response.json() if hasattr(response, "json") else None
-            # Streaming responses are intentionally bounded above. Decode the
-            # bounded body rather than trusting a response object's cached body.
+            # Streaming responses are intentionally bounded above. Decode only
+            # the bounded body rather than reading an unbounded cached response.
             import json
             rows = json.loads(body.decode("utf-8"))
         except (UnicodeDecodeError, ValueError):
