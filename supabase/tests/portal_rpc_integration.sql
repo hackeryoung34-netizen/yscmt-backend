@@ -99,6 +99,15 @@ begin
   from public.portal_create_enrollment('20000000-0000-4000-8000-000000000001');
   if v_status <> 'pending' then raise exception 'Student enrolment must be pending.'; end if;
 
+  select * into v_payment
+  from public.portal_get_my_course_enrollment('20000000-0000-4000-8000-000000000001');
+  if v_payment.enrollment_id <> v_enrollment_id
+     or v_payment.status <> 'pending'
+     or v_payment.fee_amount <> 1000
+     or v_payment.fee_currency <> 'NGN' then
+    raise exception 'Student enrolment lookup must return only the current user's stored fee and status.';
+  end if;
+
   select count(*) into v_count
   from public.portal_get_course_lessons('20000000-0000-4000-8000-000000000001');
   if v_count <> 0 then raise exception 'Pending enrolment must not unlock lessons.'; end if;
