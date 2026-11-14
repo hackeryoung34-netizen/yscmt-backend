@@ -14,7 +14,7 @@ const configuredOrigins = (Deno.env.get("PORTAL_ALLOWED_ORIGINS") ?? [
 ].join(",")).split(",").map((origin) => origin.trim()).filter(Boolean);
 const allowedOrigins = new Set(configuredOrigins);
 
-const corsHeaders = (origin: string | null): HeadersInit => {
+const corsHeaders = (origin: string | null): Record<string, string> => {
   const headers: Record<string, string> = {
     "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info, x-paystack-signature",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -71,13 +71,12 @@ async function authenticatedUser(request: Request): Promise<User> {
 }
 
 async function paystackRequest(path: string, init?: RequestInit) {
+  const headers = new Headers(init?.headers);
+  headers.set("Authorization", `Bearer ${PAYSTACK_SECRET_KEY}`);
+  headers.set("Content-Type", "application/json");
   const response = await fetch(`https://api.paystack.co${path}`, {
     ...init,
-    headers: {
-      Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
+    headers,
     signal: AbortSignal.timeout(12000),
   });
   const payload = await response.json().catch(() => null);
