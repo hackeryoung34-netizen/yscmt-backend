@@ -12,6 +12,8 @@ on:
     branches: [migration/independent-portal]
     paths:
       - "yscmt/**"
+      - "supabase/**"
+      - "docs/**"
       - ".github/workflows/portal-api-tests.yml"
 
 permissions:
