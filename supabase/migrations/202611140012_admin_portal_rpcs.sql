@@ -732,9 +732,9 @@ begin
     raise exception using errcode='22023',message='Exam options must be a four-item array.';
   end if;
   if jsonb_array_length(p_options) <> 4 or exists (
-    select 1 from jsonb_array_elements(p_options) as option(value)
-    where jsonb_typeof(option.value) <> 'string'
-       or length(trim(option.value #>> '{}')) not between 1 and 500
+    select 1 from jsonb_array_elements(p_options) as opt(value)
+    where jsonb_typeof(opt.value) <> 'string'
+       or length(trim(opt.value #>> '{}')) not between 1 and 500
   ) then
     raise exception using errcode='22023',message='Exam options must contain four non-empty text choices.';
   end if;
