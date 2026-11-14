@@ -5,6 +5,7 @@ from .portal_views import (
     PortalCourseDetailAPIView,
     PortalCourseLessonsAPIView,
     PortalCourseListAPIView,
+    PortalEnrollmentCreateAPIView,
     PortalMeAPIView,
 )
 
@@ -15,4 +16,5 @@ urlpatterns = [
     path("courses/", PortalCourseListAPIView.as_view(), name="course-list"),
     path("courses/<uuid:course_id>/", PortalCourseDetailAPIView.as_view(), name="course-detail"),
     path("courses/<uuid:course_id>/lessons/", PortalCourseLessonsAPIView.as_view(), name="course-lessons"),
+    path("enrollments/", PortalEnrollmentCreateAPIView.as_view(), name="enrollment-create"),
 ]
