@@ -582,8 +582,8 @@ begin
   update public.courses
   set title=trim(p_title),description=p_description,level=trim(p_level),
       fee_amount=p_fee_amount,fee_currency=p_fee_currency,active=p_active
-  where id=p_course_id
-  returning updated_at into v_updated_at;
+  where id=p_course_id;
+  v_updated_at := now();
 
   select coalesce(nullif(trim(up.full_name),''),au.email,'YSCMT Admin')
     into v_actor_handle
@@ -710,16 +710,19 @@ begin
   ) then raise exception using errcode='42501',message='Administrator access is required.'; end if;
   if not exists(select 1 from public.course_exams as ce where ce.id=p_exam_id)
      or p_question_text is null or length(trim(p_question_text)) not between 1 and 2000
-     or p_options is null or jsonb_typeof(p_options) <> 'array'
-     or jsonb_array_length(p_options) <> 4
-     or exists (
-       select 1 from jsonb_array_elements(p_options) as opt
-       where jsonb_typeof(opt) <> 'string'
-          or length(trim(opt #>> '{}')) not between 1 and 500
-     )
      or p_correct_option is null or p_correct_option not between 0 and 3
      or p_sort_order is null or p_sort_order<0 then
     raise exception using errcode='22023',message='Exam question details are invalid.';
+  end if;
+  if p_options is null or jsonb_typeof(p_options) <> 'array' then
+    raise exception using errcode='22023',message='Exam options must be a four-item array.';
+  end if;
+  if jsonb_array_length(p_options) <> 4 or exists (
+    select 1 from jsonb_array_elements(p_options) as option(value)
+    where jsonb_typeof(option.value) <> 'string'
+       or length(trim(option.value #>> '{}')) not between 1 and 500
+  ) then
+    raise exception using errcode='22023',message='Exam options must contain four non-empty text choices.';
   end if;
 
   insert into public.exam_questions as q(exam_id,question_text,options,correct_option,sort_order)
