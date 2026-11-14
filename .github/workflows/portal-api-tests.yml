@@ -5,6 +5,8 @@ on:
     branches: [main, migration/independent-portal]
     paths:
       - "yscmt/**"
+      - "supabase/**"
+      - "docs/**"
       - ".github/workflows/portal-api-tests.yml"
   push:
     branches: [migration/independent-portal]
@@ -37,3 +39,41 @@ jobs:
           pip install -r requirements.txt
       - name: Run portal API tests
         run: python manage.py test accounts.test_portal_auth --verbosity 2
+
+  supabase-rpc-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: yscmt_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d yscmt_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGPASSWORD: postgres
+      PGHOST: localhost
+      PGUSER: postgres
+      PGDATABASE: yscmt_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+      - name: Bootstrap isolated Supabase Auth test surface
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/portal_test_bootstrap.sql
+      - name: Apply all staged portal migrations to disposable PostgreSQL
+        run: |
+          for migration in supabase/migrations/*.sql; do
+            echo "Applying $migration"
+            psql -v ON_ERROR_STOP=1 -f "$migration"
+          done
+      - name: Run Supabase RPC integration tests
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/portal_rpc_integration.sql
