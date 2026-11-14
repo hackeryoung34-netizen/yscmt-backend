@@ -173,3 +173,8 @@ The exam RPC migration 009 also adds a unique per-session attempt link, server-s
 ## Paystack Edge Function staged (not deployed)
 
 `supabase/functions/paystack-payment/index.ts` handles initialize, verify and `charge.success` webhook actions without a VPS. The Edge Function uses the Supabase service-role key only inside the function and never in the browser. Required server-side secrets are documented in `supabase/functions/paystack-payment/README.md`; no secret values are committed. `supabase/config.toml` disables gateway JWT enforcement only for this function because the webhook uses HMAC; initialize and verify explicitly validate the user's Supabase JWT. Do not deploy until migration 010 is approved/applied and Paystack test secrets/callback origins are configured.
+
+
+## Student classroom, practice and certificate APIs staged (not deployed)
+
+Migration 011 adds self-scoped classroom session/attendance/message/announcement/reply RPCs, practice submission/read RPCs, and idempotent certificate eligibility/issuance records. Classroom meeting links are returned only to students enrolled in that course; messages and practice submissions are length-bounded; students can read only their own practice submissions. Certificate issuance requires all active lessons complete and a passed exam. Certificate PDF generation/private file storage and full instructor/admin review endpoints are not yet implemented. Migration 011 remains unapplied.
