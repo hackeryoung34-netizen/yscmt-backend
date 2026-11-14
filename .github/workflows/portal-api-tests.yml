@@ -79,3 +79,13 @@ jobs:
           done
       - name: Run Supabase RPC integration tests
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/portal_rpc_integration.sql
+
+  paystack-edge-function-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check Paystack Edge Function
+        run: deno check supabase/functions/paystack-payment/index.ts
