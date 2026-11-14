@@ -42,7 +42,7 @@ class SupabasePortalAuthenticationTests(SimpleTestCase):
         kwargs = post.call_args.kwargs
         self.assertEqual(kwargs["headers"]["Authorization"], "Bearer test-user-token")
         self.assertEqual(kwargs["headers"]["apikey"], "sb_publishable_test_key")
-        self.assertTrue(kwargs["endpoint"] if "endpoint" in kwargs else post.call_args.args[0].endswith("/rest/v1/rpc/portal_get_my_identity"))
+        self.assertTrue(post.call_args.args[0].endswith("/rest/v1/rpc/portal_get_my_identity"))
 
     @patch("accounts.portal_auth.requests.post")
     def test_rejects_missing_identity(self, post):
