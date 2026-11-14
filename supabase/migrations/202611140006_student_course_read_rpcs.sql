@@ -15,7 +15,7 @@ language sql
 stable
 security definer
 set search_path = ''
-as $$
+as $function$
   select
     c.id,
     c.title,
@@ -38,7 +38,7 @@ as $$
     )
   order by c.created_at desc, c.title asc
   limit 100
-$;
+$function$;
 
 create or replace function public.portal_get_course_detail(p_course_id uuid)
 returns table (
@@ -54,7 +54,7 @@ language sql
 stable
 security definer
 set search_path = ''
-as $$
+as $function$
   select
     c.id,
     c.title,
@@ -91,7 +91,7 @@ language sql
 stable
 security definer
 set search_path = ''
-as $$
+as $function$
   select
     l.id,
     l.title,
@@ -118,7 +118,7 @@ as $$
     and auth.uid() is not null
   order by l.sort_order asc, l.created_at asc
   limit 100
-$;
+$function$;
 
 revoke all on function public.portal_list_courses() from public, anon;
 revoke all on function public.portal_get_course_detail(uuid) from public, anon;
