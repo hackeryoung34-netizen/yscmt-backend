@@ -56,7 +56,9 @@ This follows the Supabase guidance for narrowly scoped privileged functions: bec
 
 ### Django REST Framework integration
 
-Implement a custom DRF authentication class that:
+An isolated opt-in adapter has now been added at `yscmt/accounts/portal_auth.py`, with role permissions in `portal_permissions.py` and mocked unit tests in `test_portal_auth.py`. It is not wired to any URL or view yet. Before enabling it, review and run the tests.
+
+The adapter contract is:
 
 - Reads only the Bearer token.
 - Calls `POST /rest/v1/rpc/portal_get_my_identity` over HTTPS with the Supabase publishable key and caller's Bearer token.
@@ -92,8 +94,8 @@ The Supabase service-role/secret key is not needed for this identity lookup. If 
 ## Safe API rollout sequence
 
 1. Review migration 005, then apply it to the destination Supabase project only after the user approves the schema change; verify anonymous execution is denied and authenticated callers can retrieve only their own role.
-2. Add DRF authentication that calls `POST /rest/v1/rpc/portal_get_my_identity` using the caller's Bearer token and the publishable key; do not use a service-role key.
-3. Add tests for the RPC and DRF identity adapter before enabling it.
+2. Review the isolated DRF adapter and run its mocked tests; wire it only to the independent portal API views, not to unrelated legacy routes.
+3. After the RPC migration is approved and applied, test the RPC grants and self-only result using a dedicated disposable Auth account; the test must not create a real user without approval.
 4. Set DRF default permission to deny-by-default for the portal API and explicitly mark only health/public endpoints as anonymous.
 5. Disable or isolate old Django registration and SimpleJWT endpoints for the new portal path; preserve unrelated legacy routes until their consumers are identified.
 6. Add a `/api/health/` endpoint that reveals no environment variables or secrets.
@@ -112,6 +114,7 @@ The Supabase service-role/secret key is not needed for this identity lookup. If 
 - Caller cannot elevate role by editing user metadata, app request body, query string, or local storage.
 - Caller cannot request another user's identity by changing a user ID.
 - The RPC rejects anonymous callers and cannot return another user's identity, even if a caller changes request parameters.
+- The adapter has no route integration yet; existing Django endpoints and global DRF `AllowAny` defaults have not been changed.
 - All API views deny by default.
 - Exam question payloads never include `correct_option`.
 - Payment approval, certificate issuance, and enrolment approval remain server-side and auditable.
@@ -127,4 +130,4 @@ The Supabase service-role/secret key is not needed for this identity lookup. If 
 
 ## Current progress
 
-The Supabase schema and deny-by-default RLS baseline have been applied and verified separately. No source rows, Auth users, payment records, receipt files, or secrets have been imported. This document records the next implementation boundary; it does not claim the backend integration is implemented or live.
+The Supabase schema and deny-by-default RLS baseline have been applied and verified separately. Migration 005 is committed to this branch but has not been applied to Supabase. The isolated Django identity adapter, role permissions, and mocked tests are committed but are not wired to routes and have not yet been executed in CI. No source rows, Auth users, payment records, receipt files, or secrets have been imported. Nothing in this work is deployed or live.
