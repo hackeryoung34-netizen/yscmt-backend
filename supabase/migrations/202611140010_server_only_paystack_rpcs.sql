@@ -1,5 +1,8 @@
 -- Server-only Paystack payment preparation and confirmation.
 -- Only a trusted Edge Function using service_role may execute these RPCs.
+create unique index if not exists paystack_one_pending_per_enrollment
+  on public.paystack_payments(enrolment_id)
+  where status = 'pending';
 create or replace function public.portal_prepare_paystack_payment(
   p_user_id uuid,
   p_enrollment_id uuid
@@ -146,9 +149,10 @@ begin
     raise exception using errcode = '22023', message = 'Invalid verified payment details.';
   end if;
 
-  if p_gateway_response ->> 'status' <> 'success'
-     or p_gateway_response ->> 'reference' <> p_reference
-     or p_gateway_response ->> 'currency' <> p_currency
+  if jsonb_typeof(p_gateway_response) <> 'object'
+     or (p_gateway_response ->> 'status') is distinct from 'success'
+     or (p_gateway_response ->> 'reference') is distinct from p_reference
+     or (p_gateway_response ->> 'currency') is distinct from p_currency
      or coalesce((p_gateway_response ->> 'amount')::bigint, -1) <> p_amount_kobo then
     raise exception using errcode = '22023', message = 'Paystack verification payload does not match the payment.';
   end if;
