@@ -166,3 +166,5 @@ A GitHub Actions workflow was added to run the isolated Django portal auth/API t
 - Migration 009 adds active exam catalogue, timed exam sessions, question delivery without `correct_option`, server-side scoring, and idempotent submission per exam session. It bounds exams to 100 questions and answer payloads to 64 KiB.
 - The Student Portal preview UI now includes lesson completion/progress and a timed exam flow. The database RPC migrations remain unapplied; these controls will remain unavailable until the migrations are reviewed and explicitly approved.
 - A disposable PostgreSQL integration-test harness and GitHub Actions workflow were added to apply migrations 001–009 and exercise student enrolment, progress, exam timing/scoring, answer-key isolation, and browser table-access restrictions. Its run result must be checked before treating the SQL as validated.
+
+The exam RPC migration 009 also adds a unique per-session attempt link, server-side scoring and answer-key isolation. It remains unapplied pending review; no live exam sessions or attempts have been created.
