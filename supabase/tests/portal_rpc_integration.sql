@@ -158,6 +158,16 @@ begin
 
   begin
     perform * from public.portal_confirm_paystack_payment(
+      '10000000-0000-4000-8000-000000000002',
+      v_reference,100000,'NGN',v_gateway
+    );
+    raise exception 'A different account must not confirm this payment.';
+  exception when insufficient_privilege then
+    null;
+  end;
+
+  begin
+    perform * from public.portal_confirm_paystack_payment(
       auth.uid(),v_reference,100001,'NGN',
       jsonb_build_object('status','success','reference',v_reference,'currency','NGN','amount',100001)
     );
@@ -173,9 +183,9 @@ begin
   end if;
 
   select * into v_payment
-  from public.portal_confirm_paystack_payment(auth.uid(),v_reference,100000,'NGN',v_gateway);
+  from public.portal_confirm_paystack_payment(null,v_reference,100000,'NGN',v_gateway);
   if v_payment.status <> 'success' then
-    raise exception 'Repeated Paystack confirmation must be idempotent.';
+    raise exception 'Repeated webhook confirmation must be idempotent.';
   end if;
 
   select count(*) into v_count
