@@ -78,3 +78,8 @@ Destination: Supabase project `wzpkfjnymsxczbkiukrp`
 ## Current status
 
 This document is a field-level plan only. No Hatchable data, user accounts, payment records, receipt files, or settings have been exported or imported. The live Hatchable portal and `yscmtenterprise.ng` have not been changed.
+
+
+## New exam-session linkage
+
+The target `exam_attempts.exam_session_id` is a migration-generated nullable foreign key added by migration 009, not a legacy Hatchable field. Imported historical attempts may leave it null; all newly submitted portal attempts bind to exactly one exam session and use a unique index to make session submission idempotent.
