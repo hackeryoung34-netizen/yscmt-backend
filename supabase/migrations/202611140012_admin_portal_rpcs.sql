@@ -136,6 +136,9 @@ begin
   if v_enrollment.user_id = v_admin_id then
     raise exception using errcode = '42501', message = 'An administrator cannot review their own enrolment.';
   end if;
+  if v_enrollment.status in ('approved','completed') and p_status = 'rejected' then
+    raise exception using errcode = '22023', message = 'An approved enrolment cannot be rejected; use a separate suspension workflow.';
+  end if;
   if v_enrollment.status = 'completed' and p_status <> 'completed' then
     raise exception using errcode = '22023', message = 'A completed enrolment cannot be downgraded.';
   end if;
@@ -300,10 +303,21 @@ begin
   select c.fee_amount,c.fee_currency into v_course_fee,v_course_currency
   from public.courses as c where c.id = v_submission.course_id;
 
+  if not exists (
+    select 1 from public.enrollments as e
+    where e.id = v_submission.enrolment_id
+      and e.user_id = v_submission.user_id
+      and e.course_id = v_submission.course_id
+      and e.status = 'pending'
+  ) then
+    raise exception using errcode = '22023', message = 'Payment submission is not attached to a pending enrolment.';
+  end if;
+
   if p_status = 'approved' and (
     v_submission.amount <> v_course_fee
     or v_submission.currency <> v_course_currency
     or v_submission.storage_key = ''
+    or v_submission.storage_key not like v_submission.user_id::text || '/%'
   ) then
     raise exception using errcode = '22023', message = 'Receipt amount or currency does not match the stored course fee.';
   end if;
