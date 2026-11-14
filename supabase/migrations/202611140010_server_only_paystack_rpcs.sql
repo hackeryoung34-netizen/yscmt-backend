@@ -123,6 +123,7 @@ end;
 $function$;
 
 create or replace function public.portal_confirm_paystack_payment(
+  p_user_id uuid,
   p_reference text,
   p_amount_kobo bigint,
   p_currency text,
@@ -162,6 +163,10 @@ begin
 
   if not found then
     raise exception using errcode = 'P0002', message = 'Payment reference not found.';
+  end if;
+
+  if p_user_id is not null and v_payment.user_id <> p_user_id then
+    raise exception using errcode = '42501', message = 'This payment does not belong to the authenticated account.';
   end if;
 
   if v_payment.amount_kobo <> p_amount_kobo or v_payment.currency <> p_currency then
@@ -206,16 +211,16 @@ $function$;
 
 revoke all on function public.portal_prepare_paystack_payment(uuid, uuid) from public, anon, authenticated;
 revoke all on function public.portal_set_paystack_authorization_url(text, text) from public, anon, authenticated;
-revoke all on function public.portal_confirm_paystack_payment(text, bigint, text, jsonb) from public, anon, authenticated;
+revoke all on function public.portal_confirm_paystack_payment(uuid, text, bigint, text, jsonb) from public, anon, authenticated;
 grant execute on function public.portal_prepare_paystack_payment(uuid, uuid) to service_role;
 grant execute on function public.portal_set_paystack_authorization_url(text, text) to service_role;
-grant execute on function public.portal_confirm_paystack_payment(text, bigint, text, jsonb) to service_role;
+grant execute on function public.portal_confirm_paystack_payment(uuid, text, bigint, text, jsonb) to service_role;
 
 comment on function public.portal_prepare_paystack_payment(uuid, uuid) is
   'Server-only: validates a pending student enrolment and derives the exact NGN amount from the stored course fee.';
 comment on function public.portal_set_paystack_authorization_url(text, text) is
   'Server-only: stores a validated Paystack checkout URL for a pending payment reference.';
-comment on function public.portal_confirm_paystack_payment(text, bigint, text, jsonb) is
+comment on function public.portal_confirm_paystack_payment(uuid, text, bigint, text, jsonb) is
   'Server-only: confirms an exact Paystack-verified amount/currency/reference and idempotently approves the enrolment.';
  then
     raise exception using errcode = '22023', message = 'Paystack verification payload does not match the payment.';
