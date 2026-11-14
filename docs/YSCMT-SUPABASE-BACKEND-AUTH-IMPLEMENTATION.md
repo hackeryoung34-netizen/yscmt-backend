@@ -59,9 +59,12 @@ This follows the Supabase guidance for narrowly scoped privileged functions: bec
 A separate portal-only route namespace has now been added:
 
 - `GET /api/portal/v1/me/` returns the caller's verified portal identity.
-- It explicitly uses `SupabasePortalAuthentication` and `IsAuthenticated`.
-- It is mounted separately from legacy `/api/auth/` and SimpleJWT routes.
-- It does not modify the global DRF defaults or legacy endpoint behaviour.
+- `GET /api/portal/v1/courses/` lists active courses and only the caller's own enrollment status.
+- `GET /api/portal/v1/courses/<uuid>/` returns active course metadata.
+- `GET /api/portal/v1/courses/<uuid>/lessons/` returns lesson content only for the caller's approved/completed enrollment.
+- Student catalogue/detail/lesson views explicitly use Supabase authentication and the trusted `student` role.
+- The routes are mounted separately from legacy `/api/auth/` and SimpleJWT routes; global DRF defaults and legacy endpoint behaviour remain unchanged.
+- The new RPCs are narrowly scoped, derive identity from `auth.uid()`, do not accept a user ID, and cap list results at 100 rows.
 
 An isolated adapter has been added at `yscmt/accounts/portal_auth.py`, with role permissions in `portal_permissions.py`, a portal-only identity view in `portal_views.py`, and URL registration in `portal_urls.py`. The route is mounted at `/api/portal/v1/me/`; it explicitly uses Supabase authentication and DRF `IsAuthenticated`. Mocked unit tests cover the identity response, missing/invalid identity, malformed and oversized responses, identity-service errors, missing tokens, and student/instructor role boundaries. These tests are committed but have not yet been executed.
 
@@ -103,7 +106,8 @@ The Supabase service-role/secret key is not needed for this identity lookup. If 
 1. Review migration 005, then apply it to the destination Supabase project only after the user approves the schema change; verify anonymous execution is denied and authenticated callers can retrieve only their own role.
 2. Review the isolated DRF adapter and portal identity endpoint; mocked tests are committed but have not been run in CI.
 3. After migration 005 is separately approved and applied, test the RPC grants and self-only result using a dedicated disposable Auth account; the test must not create a real user without approval.
-4. Build portal courses, enrolments, lesson progress, exam and admin endpoints in this isolated namespace, with per-route permissions and ownership checks.
+4. Review and separately approve migration `202611140006_student_course_read_rpcs.sql`; then test course catalogue/detail and lesson access against disposable test identities. The RPC migration is committed but not applied.
+5. Build portal enrolment, lesson progress, exam and admin endpoints in this isolated namespace, with per-route permissions and ownership checks.
 5. Set DRF default permission to deny-by-default for the portal API and explicitly mark only health/public endpoints as anonymous.
 5. Disable or isolate old Django registration and SimpleJWT endpoints for the new portal path; preserve unrelated legacy routes until their consumers are identified.
 6. Add a `/api/health/` endpoint that reveals no environment variables or secrets.
@@ -139,4 +143,4 @@ The Supabase service-role/secret key is not needed for this identity lookup. If 
 
 ## Current progress
 
-The Supabase schema and deny-by-default RLS baseline have been applied and verified separately. Migration 005 is committed to this branch but has not been applied to Supabase. The isolated Django identity adapter, role permissions, portal identity endpoint, and mocked tests are committed. Additional tests for upstream failures, oversized/malformed payloads, expired tokens, and instructor/admin separation were added in commit 708735239d4332d65984875adbd527766997f7a9. The mocked tests have not yet been executed in CI. No source rows, Auth users, payment records, receipt files, or secrets have been imported. Nothing in this work is deployed or live.
+The Supabase schema and deny-by-default RLS baseline have been applied and verified separately. Migration 005 is committed to this branch but has not been applied to Supabase. The isolated Django identity adapter, role permissions, portal identity endpoint, student course list/detail/lesson endpoints, narrow Supabase RPC migration 006, and mocked tests are committed. Additional tests for upstream failures, oversized/malformed payloads, expired tokens, and instructor/admin separation were added in commit 708735239d4332d65984875adbd527766997f7a9. The mocked tests have not yet been executed in CI. Migration 006 has not been applied to Supabase, so course endpoints are code-complete but not operational against the destination database yet. No source rows, Auth users, payment records, receipt files, or secrets have been imported. Nothing in this work is deployed or live.
