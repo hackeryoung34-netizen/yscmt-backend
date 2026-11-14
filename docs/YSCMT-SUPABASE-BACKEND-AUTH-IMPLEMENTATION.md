@@ -59,10 +59,10 @@ This follows the Supabase guidance for narrowly scoped privileged functions: bec
 Implement a custom DRF authentication class that:
 
 - Reads only the Bearer token.
-- Calls the private `portal-identity` Edge Function over HTTPS with the Supabase publishable key and caller's Bearer token.
+- Calls `POST /rest/v1/rpc/portal_get_my_identity` over HTTPS with the Supabase publishable key and caller's Bearer token.
 - Uses strict timeouts and bounded response size.
 - Maps invalid/expired token responses to DRF `AuthenticationFailed`.
-- Creates a lightweight request principal from the verified identity response (UUID, email, role, display name).
+- Creates a lightweight request principal from the verified RPC response (UUID, email, role, display name, phone).
 - Does not create or look up a Django `auth.User` row.
 - Never logs the access token, publishable key, response headers, or secret material.
 
@@ -111,7 +111,7 @@ The Supabase service-role/secret key is not needed for this identity lookup. If 
 - Valid admin: can call only the explicitly protected admin endpoints.
 - Caller cannot elevate role by editing user metadata, app request body, query string, or local storage.
 - Caller cannot request another user's identity by changing a user ID.
-- Edge Function rejects invalid JWTs and does not return secrets.
+- The RPC rejects anonymous callers and cannot return another user's identity, even if a caller changes request parameters.
 - All API views deny by default.
 - Exam question payloads never include `correct_option`.
 - Payment approval, certificate issuance, and enrolment approval remain server-side and auditable.
@@ -121,7 +121,7 @@ The Supabase service-role/secret key is not needed for this identity lookup. If 
 - Creating real Auth users or changing existing users.
 - Importing Hatchable student, payment, or receipt data.
 - Enabling Paystack live processing.
-- Deploying the Edge Function or Django backend to production.
+- Deploying the Django backend to production.
 - Buying a VPS or upgrading any paid service.
 - Changing Vercel production routing, DNS, the main website, or Hatchable.
 
