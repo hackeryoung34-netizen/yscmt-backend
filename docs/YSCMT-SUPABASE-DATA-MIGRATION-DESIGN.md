@@ -92,7 +92,7 @@ The destination may normalize `student_profiles` into `user_profiles`, but all e
 - Supabase project is ACTIVE_HEALTHY. The target has 19 public application tables and 3 private tables; all 22 have RLS enabled.
 - Hatchable remains ACTIVE with 21 source tables and 31 API routes.
 - The initial schema, private-table protections, Auth profile/role registry, and legacy teacher-reply compatibility migrations (001–004) have been applied and verified.
-- RPC migrations 005 (identity), 006 (student course reads), 007 (student pending enrolment), 008 (student lesson progress), and 009 (student timed exams) are committed to the migration branch but have NOT been applied to Supabase.
+- RPC migrations 005 (identity), 006 (student course reads), 007 (student pending enrolment), 008 (student lesson progress), 009 (student timed exams), and 010 (server-only Paystack payment preparation/confirmation) are committed to the migration branch but have NOT been applied to Supabase.
 - No user records, payments, passwords, receipt files, or Auth accounts have been exported or imported.
 - No production domain routing, DNS, Vercel production deployment, or Hatchable changes have been made.
 - The no-VPS Vercel + Supabase preview UI includes student login, course/lesson views, enrolment requests, lesson completion/progress, and a timed exam interface. Static checks pass. The next gates are review/apply of staged RPC migrations in a controlled test environment, disposable-account testing after approval, and completion of payment/certificate/admin workflows before production cutover.
@@ -178,3 +178,11 @@ The initial aggregate privilege query counted the intentional authenticated prof
 - `portal_submit_exam` validates a complete answer map, bounds the JSON payload, scores inside Postgres, records one attempt per session, and returns the same attempt on a repeated submission.
 - Historical imported attempts may have no `exam_session_id`; new portal attempts use it for idempotency.
 - Migration 009 remains staged and unapplied. Integration-test execution is not yet confirmed.
+
+
+## Paystack payment design (migration 010 + Edge Function)
+
+- Migration 010 adds server-role-only RPCs to prepare a payment from a pending student enrolment, derive the amount from the stored course fee, store the Paystack checkout URL, and confirm only a verified matching amount/currency/reference.
+- Only NGN course fees are currently enabled; amounts are converted to kobo server-side. Pending checkout references expire after 30 minutes and are unique per pending enrolment.
+- The `paystack-payment` Supabase Edge Function manually validates user JWTs for initialize/verify actions, uses the service-role key only server-side, checks Paystack test/live domain against the key prefix, verifies transactions directly with Paystack, validates raw-body HMAC-SHA512 webhooks, and stores only a sanitized gateway response.
+- The Edge Function and migration 010 are committed but not deployed/applied. No Paystack secret has been added to Supabase and no real/test payment has been initiated.
