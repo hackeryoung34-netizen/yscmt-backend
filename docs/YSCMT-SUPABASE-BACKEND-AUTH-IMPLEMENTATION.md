@@ -42,17 +42,17 @@ Do not issue a second Django password or SimpleJWT account for the same portal u
 
 The role must come from `private.user_roles`, never from browser-supplied metadata, request JSON, local storage, or editable user metadata.
 
-Recommended boundary:
+Recommended boundary: a narrow, self-only Postgres RPC rather than exposing the private schema or creating a service-role Edge Function.
 
-1. Add a narrowly scoped Supabase Edge Function named `portal-identity`.
-2. Require JWT verification on the function.
-3. Inside the function, validate the caller with Supabase Auth `getUser(accessToken)`.
-4. Use a server-only service-role client inside the function to read exactly one row from `private.user_roles` for that verified Auth user ID, and the matching `public.user_profiles` row.
-5. Return only `id`, `email`, safe profile fields, and the trusted role. Never return service credentials or other users' rows.
-6. Return `401` for missing/invalid identity and `403` for an authenticated identity without a valid portal role.
-7. Keep `verify_jwt=true`; do not disable JWT verification to make the function easier to call.
+Migration `202611140005_secure_portal_identity_rpc.sql` defines `public.portal_get_my_identity()`:
 
-The function must not accept a requested user ID or role from the caller. It must derive the user ID from the verified token. Its service-role key must exist only in Edge Function secrets.
+1. The function derives identity exclusively from `auth.uid()`; it accepts no user ID or role argument.
+2. It reads the trusted role from `private.user_roles` and safe profile fields from `public.user_profiles`.
+3. It uses `SECURITY DEFINER` with an empty `search_path` and fully qualified table/function references.
+4. Execution is explicitly revoked from `PUBLIC` and `anon`, and granted only to `authenticated`.
+5. The function returns at most the caller's own row. The private schema remains unexposed to the Data API.
+
+This follows the Supabase guidance for narrowly scoped privileged functions: because a public-schema SECURITY DEFINER function is callable by default through inherited PUBLIC privileges, revoke those privileges explicitly and enforce the caller identity inside the function. Do not add a general-purpose role lookup RPC or accept a caller-supplied UUID.
 
 ### Django REST Framework integration
 
@@ -81,25 +81,26 @@ Backend-only configuration:
 
 - `SUPABASE_URL`
 - `SUPABASE_PUBLISHABLE_KEY`
-- `SUPABASE_PORTAL_IDENTITY_FUNCTION_URL` (or derive from the validated project URL)
+- No service-role key is required by Django for this identity lookup. The caller's Supabase access token is sent to the RPC with the publishable key.
 - `SECRET_KEY` (new random production secret; no fallback)
 - `DEBUG` (must default to false)
 - `ALLOWED_HOSTS`
 - `DATABASE_URL` only if the chosen deployment uses a database connection for Django's own framework tables.
 
-The Supabase service-role/secret key belongs only in the Edge Function secret store. It must never be added to Vercel client variables, React source, Git, or a browser bundle.
+The Supabase service-role/secret key is not needed for this identity lookup. If a later server-side workflow requires it, keep it only in server-side secrets; never add it to Vercel client variables, React source, Git, or a browser bundle.
 
 ## Safe API rollout sequence
 
-1. Add isolated Supabase identity function source and tests; do not deploy it yet.
-2. Add DRF authentication and role permission classes behind an explicit feature flag, with tests using mocked identity responses.
-3. Set DRF default permission to deny-by-default for the portal API and explicitly mark only health/public endpoints as anonymous.
-4. Disable or isolate old Django registration and SimpleJWT endpoints for the new portal path; preserve unrelated legacy routes until their consumers are identified.
-5. Add a `/api/health/` endpoint that reveals no environment variables or secrets.
-6. Run unit tests, static checks, dependency audit, and Django deployment checks with production-like environment variables.
-7. Deploy only to an isolated preview/staging environment after the user approves the destination and cost.
-8. Test with a dedicated disposable Supabase Auth account only after explicit approval. Do not create a real user as part of a silent smoke test.
-9. Only after preview acceptance, plan the portal path rewrite and production cutover as a separate approval step.
+1. Review migration 005, then apply it to the destination Supabase project only after the user approves the schema change; verify anonymous execution is denied and authenticated callers can retrieve only their own role.
+2. Add DRF authentication that calls `POST /rest/v1/rpc/portal_get_my_identity` using the caller's Bearer token and the publishable key; do not use a service-role key.
+3. Add tests for the RPC and DRF identity adapter before enabling it.
+4. Set DRF default permission to deny-by-default for the portal API and explicitly mark only health/public endpoints as anonymous.
+5. Disable or isolate old Django registration and SimpleJWT endpoints for the new portal path; preserve unrelated legacy routes until their consumers are identified.
+6. Add a `/api/health/` endpoint that reveals no environment variables or secrets.
+7. Run unit tests, static checks, dependency audit, and Django deployment checks with production-like environment variables.
+8. Deploy only to an isolated preview/staging environment after the user approves the destination and cost.
+9. Test with a dedicated disposable Supabase Auth account only after explicit approval. Do not create a real user as part of a silent smoke test.
+10. Only after preview acceptance, plan the portal path rewrite and production cutover as a separate approval step.
 
 ## Required security tests
 
