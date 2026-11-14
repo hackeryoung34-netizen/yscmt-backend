@@ -168,3 +168,8 @@ A GitHub Actions workflow was added to run the isolated Django portal auth/API t
 - A disposable PostgreSQL integration-test harness and GitHub Actions workflow were added to apply migrations 001–009 and exercise student enrolment, progress, exam timing/scoring, answer-key isolation, and browser table-access restrictions. Its run result must be checked before treating the SQL as validated.
 
 The exam RPC migration 009 also adds a unique per-session attempt link, server-side scoring and answer-key isolation. It remains unapplied pending review; no live exam sessions or attempts have been created.
+
+
+## Paystack Edge Function staged (not deployed)
+
+`supabase/functions/paystack-payment/index.ts` handles initialize, verify and `charge.success` webhook actions without a VPS. The Edge Function uses the Supabase service-role key only inside the function and never in the browser. Required server-side secrets are documented in `supabase/functions/paystack-payment/README.md`; no secret values are committed. `supabase/config.toml` disables gateway JWT enforcement only for this function because the webhook uses HMAC; initialize and verify explicitly validate the user's Supabase JWT. Do not deploy until migration 010 is approved/applied and Paystack test secrets/callback origins are configured.
