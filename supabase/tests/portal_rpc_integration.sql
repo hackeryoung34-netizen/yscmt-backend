@@ -81,6 +81,9 @@ declare
   v_answers jsonb;
   v_attempt record;
   v_attempt_again record;
+  v_payment record;
+  v_reference text;
+  v_gateway jsonb;
 begin
   select role into v_role from private.user_roles
   where user_id = auth.uid();
@@ -110,10 +113,57 @@ begin
   from public.portal_list_course_exams('20000000-0000-4000-8000-000000000001');
   if v_count <> 0 then raise exception 'Pending enrolment must not reveal exams.'; end if;
 
-  update public.enrollments
-  set status = 'approved'
-  where user_id = auth.uid()
-    and course_id = '20000000-0000-4000-8000-000000000001';
+  if has_function_privilege('authenticated','public.portal_prepare_paystack_payment(uuid,uuid)','EXECUTE') then
+    raise exception 'Browser roles must not execute server-only payment preparation.';
+  end if;
+  if not has_function_privilege('service_role','public.portal_prepare_paystack_payment(uuid,uuid)','EXECUTE') then
+    raise exception 'Service role must be able to prepare payments.';
+  end if;
+
+  select * into v_payment
+  from public.portal_prepare_paystack_payment(
+    auth.uid(),
+    '20000000-0000-4000-8000-000000000001'
+  );
+  v_reference := v_payment.reference;
+  if v_payment.amount_kobo <> 100000 or v_payment.currency <> 'NGN'
+     or v_payment.email <> 'student@example.test' then
+    raise exception 'Paystack amount, currency or account email was not derived correctly.';
+  end if;
+
+  perform public.portal_set_paystack_authorization_url(
+    v_reference,
+    'https://checkout.paystack.com/test-reference'
+  );
+
+  v_gateway := jsonb_build_object(
+    'status','success',
+    'reference',v_reference,
+    'currency','NGN',
+    'amount',100000
+  );
+
+  begin
+    perform * from public.portal_confirm_paystack_payment(
+      v_reference,100001,'NGN',
+      jsonb_build_object('status','success','reference',v_reference,'currency','NGN','amount',100001)
+    );
+    raise exception 'Payment with a mismatched amount must not be confirmed.';
+  exception when sqlstate '22023' then
+    null;
+  end;
+
+  select * into v_payment
+  from public.portal_confirm_paystack_payment(v_reference,100000,'NGN',v_gateway);
+  if v_payment.status <> 'success' then
+    raise exception 'Verified Paystack payment should be marked successful.';
+  end if;
+
+  select * into v_payment
+  from public.portal_confirm_paystack_payment(v_reference,100000,'NGN',v_gateway);
+  if v_payment.status <> 'success' then
+    raise exception 'Repeated Paystack confirmation must be idempotent.';
+  end if;
 
   select count(*) into v_count
   from public.portal_get_course_lessons('20000000-0000-4000-8000-000000000001');
