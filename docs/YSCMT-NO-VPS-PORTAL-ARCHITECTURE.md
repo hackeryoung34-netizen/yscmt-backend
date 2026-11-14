@@ -55,7 +55,7 @@ The portal is a static frontend and the data/authentication services are managed
 
 1. Review and explicitly approve the RPC migrations for the Supabase destination.
 2. Test Auth profile creation using a disposable account only after approval.
-3. Complete the payments, certificates, and full admin APIs with the same fail-closed authorization model.
+3. Complete payment activation/reconciliation and full admin APIs; certificate eligibility, classroom and practice student RPCs are now staged with the same fail-closed authorization model.
 4. Verify preview UI against the deployed RPCs and test role separation.
 5. Complete source-to-target data reconciliation and private receipt storage design.
 6. Obtain explicit approval before production path routing or any live data import.
