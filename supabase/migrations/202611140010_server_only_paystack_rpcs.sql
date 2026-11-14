@@ -66,7 +66,9 @@ begin
   limit 1
   for update;
 
-  if found and v_payment.amount_kobo = v_amount_kobo and v_payment.currency = 'NGN' then
+  if found and v_payment.amount_kobo = v_amount_kobo
+     and v_payment.currency = 'NGN'
+     and v_payment.created_at > now() - interval '30 minutes' then
     return query select v_payment.reference, v_payment.amount_kobo,
       v_payment.currency, v_email, v_payment.authorization_url;
     return;
