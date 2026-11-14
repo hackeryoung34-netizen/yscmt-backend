@@ -66,7 +66,7 @@ A separate portal-only route namespace has now been added:
 - The routes are mounted separately from legacy `/api/auth/` and SimpleJWT routes; global DRF defaults and legacy endpoint behaviour remain unchanged.
 - The new RPCs are narrowly scoped, derive identity from `auth.uid()`, do not accept a user ID, and cap list results at 100 rows.
 
-An isolated adapter has been added at `yscmt/accounts/portal_auth.py`, with role permissions in `portal_permissions.py`, a portal-only identity view in `portal_views.py`, and URL registration in `portal_urls.py`. The route is mounted at `/api/portal/v1/me/`; it explicitly uses Supabase authentication and DRF `IsAuthenticated`. Mocked unit tests cover the identity response, missing/invalid identity, malformed and oversized responses, identity-service errors, missing tokens, and student/instructor role boundaries. These tests are committed but have not yet been executed.
+The adapter lives in `yscmt/accounts/portal_auth.py`; role permissions are in `portal_permissions.py`; the bounded RPC client is in `portal_rpc.py`; and portal views/routes are in `portal_views.py` and `portal_urls.py`. Mocked tests cover identity validation, upstream failures, bounded/malformed responses, missing tokens, student/instructor role boundaries, and the student course routes. The tests are committed but have not yet been executed.
 
 The adapter contract is:
 
@@ -108,13 +108,13 @@ The Supabase service-role/secret key is not needed for this identity lookup. If 
 3. After migration 005 is separately approved and applied, test the RPC grants and self-only result using a dedicated disposable Auth account; the test must not create a real user without approval.
 4. Review and separately approve migration `202611140006_student_course_read_rpcs.sql`; then test course catalogue/detail and lesson access against disposable test identities. The RPC migration is committed but not applied.
 5. Build portal enrolment, lesson progress, exam and admin endpoints in this isolated namespace, with per-route permissions and ownership checks.
-5. Set DRF default permission to deny-by-default for the portal API and explicitly mark only health/public endpoints as anonymous.
-5. Disable or isolate old Django registration and SimpleJWT endpoints for the new portal path; preserve unrelated legacy routes until their consumers are identified.
-6. Add a `/api/health/` endpoint that reveals no environment variables or secrets.
-7. Run unit tests, static checks, dependency audit, and Django deployment checks with production-like environment variables.
-8. Deploy only to an isolated preview/staging environment after the user approves the destination and cost.
-9. Test with a dedicated disposable Supabase Auth account only after explicit approval. Do not create a real user as part of a silent smoke test.
-10. Only after preview acceptance, plan the portal path rewrite and production cutover as a separate approval step.
+6. Set DRF default permission to deny-by-default for the portal API and explicitly mark only health/public endpoints as anonymous.
+7. Disable or isolate old Django registration and SimpleJWT endpoints for the new portal path; preserve unrelated legacy routes until their consumers are identified.
+8. Add a `/api/health/` endpoint that reveals no environment variables or secrets.
+9. Run unit tests, static checks, dependency audit, and Django deployment checks with production-like environment variables.
+10. Deploy only to an isolated preview/staging environment after the user approves the destination and cost.
+11. Test with a dedicated disposable Supabase Auth account only after explicit approval. Do not create a real user as part of a silent smoke test.
+12. Only after preview acceptance, plan the portal path rewrite and production cutover as a separate approval step.
 
 ## Required security tests
 
@@ -126,7 +126,7 @@ The Supabase service-role/secret key is not needed for this identity lookup. If 
 - Caller cannot elevate role by editing user metadata, app request body, query string, or local storage.
 - Caller cannot request another user's identity by changing a user ID.
 - The RPC rejects anonymous callers and cannot return another user's identity, even if a caller changes request parameters.
-- The portal adapter is mounted only on `/api/portal/v1/me/`; other portal business routes are not implemented yet.
+- Course catalogue/detail/lesson routes use only the student role; instructors and admins are denied until separate workflows are implemented.
 - Existing Django endpoints and global DRF `AllowAny` defaults have not been changed.
 - All API views deny by default.
 - Exam question payloads never include `correct_option`.
