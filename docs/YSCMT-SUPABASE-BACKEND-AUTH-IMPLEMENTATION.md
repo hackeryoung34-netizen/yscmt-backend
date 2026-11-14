@@ -63,7 +63,7 @@ A separate portal-only route namespace has now been added:
 - It is mounted separately from legacy `/api/auth/` and SimpleJWT routes.
 - It does not modify the global DRF defaults or legacy endpoint behaviour.
 
-An isolated opt-in adapter has now been added at `yscmt/accounts/portal_auth.py`, with role permissions in `portal_permissions.py` and mocked unit tests in `test_portal_auth.py`. It is not wired to any URL or view yet. Before enabling it, review and run the tests.
+An isolated adapter has been added at `yscmt/accounts/portal_auth.py`, with role permissions in `portal_permissions.py`, a portal-only identity view in `portal_views.py`, and URL registration in `portal_urls.py`. The route is mounted at `/api/portal/v1/me/`; it explicitly uses Supabase authentication and DRF `IsAuthenticated`. Mocked unit tests cover the identity response, missing/invalid identity, malformed and oversized responses, identity-service errors, missing tokens, and student/instructor role boundaries. These tests are committed but have not yet been executed.
 
 The adapter contract is:
 
@@ -139,4 +139,4 @@ The Supabase service-role/secret key is not needed for this identity lookup. If 
 
 ## Current progress
 
-The Supabase schema and deny-by-default RLS baseline have been applied and verified separately. Migration 005 is committed to this branch but has not been applied to Supabase. The isolated Django identity adapter, role permissions, portal identity endpoint, and mocked tests are committed. The mocked tests have not yet been executed in CI. No source rows, Auth users, payment records, receipt files, or secrets have been imported. Nothing in this work is deployed or live.
+The Supabase schema and deny-by-default RLS baseline have been applied and verified separately. Migration 005 is committed to this branch but has not been applied to Supabase. The isolated Django identity adapter, role permissions, portal identity endpoint, and mocked tests are committed. Additional tests for upstream failures, oversized/malformed payloads, expired tokens, and instructor/admin separation were added in commit 708735239d4332d65984875adbd527766997f7a9. The mocked tests have not yet been executed in CI. No source rows, Auth users, payment records, receipt files, or secrets have been imported. Nothing in this work is deployed or live.
