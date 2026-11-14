@@ -159,3 +159,10 @@ The source schema inspection confirmed that source ownership and several creator
 To avoid inventing an identity for historical teacher replies, migration `supabase/migrations/202611140004_allow_unattributed_legacy_teacher_replies.sql` makes `classroom_teacher_replies.created_by` nullable. The reply remains preserved while its creator can remain unattributed if no genuine source user can be matched.
 
 Still no source records, Auth users, payment records, files, or settings have been imported.
+
+
+## 11. Post-migration verification — 2026-11-14
+
+After migration 004, catalog checks confirmed 19 public tables and 3 private tables, with RLS enabled on all 22. A privilege audit returned no unexpected browser SELECT grants: the only intended browser-readable table is `public.user_profiles`, constrained by self-only RLS policies; all other application/private tables deny anon/authenticated SELECT. The health advisor returned no findings.
+
+The initial aggregate privilege query counted the intentional authenticated profile SELECT as a nonzero result; a second query excluded that expected self-profile access and returned zero unexpected browser SELECT grants. No data import or live-domain change has occurred.
