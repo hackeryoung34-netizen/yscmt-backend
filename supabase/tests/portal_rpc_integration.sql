@@ -145,7 +145,7 @@ begin
 
   begin
     perform * from public.portal_confirm_paystack_payment(
-      v_reference,100001,'NGN',
+      auth.uid(),v_reference,100001,'NGN',
       jsonb_build_object('status','success','reference',v_reference,'currency','NGN','amount',100001)
     );
     raise exception 'Payment with a mismatched amount must not be confirmed.';
@@ -154,7 +154,7 @@ begin
   end;
 
   select * into v_payment
-  from public.portal_confirm_paystack_payment(v_reference,100000,'NGN',v_gateway);
+  from public.portal_confirm_paystack_payment(auth.uid(),v_reference,100000,'NGN',v_gateway);
   if v_payment.status <> 'success' then
     raise exception 'Verified Paystack payment should be marked successful.';
   end if;
