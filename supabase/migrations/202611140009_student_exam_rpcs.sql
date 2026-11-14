@@ -248,7 +248,7 @@ begin
   select count(*)::integer into v_answer_count
   from jsonb_object_keys(p_answers);
 
-  if v_question_count = 0 or v_answer_count <> v_question_count then
+  if v_question_count = 0 or v_question_count > 100 or v_answer_count <> v_question_count then
     raise exception using errcode = '22023', message = 'Submit one answer for every exam question.';
   end if;
 
