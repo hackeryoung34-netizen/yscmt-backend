@@ -185,7 +185,9 @@ class SupabasePortalAuthenticationTests(SimpleTestCase):
 
         self.assertEqual(result.status_code, 200)
         self.assertEqual(result.data["results"][0]["title"], "Python Basics")
-        rpc.assert_called_once_with(request, "portal_list_courses")
+        rpc.assert_called_once()
+        self.assertEqual(rpc.call_args.args[1], "portal_list_courses")
+        self.assertEqual(rpc.call_args.args[0].headers["Authorization"], "Bearer test-user-token")
 
     @patch("accounts.portal_views.call_portal_rpc")
     def test_course_lessons_are_requested_through_gated_rpc(self, rpc):
@@ -209,11 +211,9 @@ class SupabasePortalAuthenticationTests(SimpleTestCase):
 
         self.assertEqual(result.status_code, 200)
         self.assertEqual(result.data["results"], [])
-        rpc.assert_called_once_with(
-            request,
-            "portal_get_course_lessons",
-            {"p_course_id": str(course_id)},
-        )
+        rpc.assert_called_once()
+        self.assertEqual(rpc.call_args.args[1], "portal_get_course_lessons")
+        self.assertEqual(rpc.call_args.args[2], {"p_course_id": str(course_id)})
 
     @patch("accounts.portal_views.call_portal_rpc")
     def test_instructor_is_denied_student_course_catalogue(self, rpc):
@@ -276,9 +276,9 @@ class SupabasePortalAuthenticationTests(SimpleTestCase):
 
         self.assertEqual(result.status_code, 201)
         self.assertEqual(result.data["status"], "pending")
-        rpc.assert_called_once_with(
-            request, "portal_create_enrollment", {"p_course_id": str(course_id)}
-        )
+        rpc.assert_called_once()
+        self.assertEqual(rpc.call_args.args[1], "portal_create_enrollment")
+        self.assertEqual(rpc.call_args.args[2], {"p_course_id": str(course_id)})
 
     @patch("accounts.portal_views.call_portal_rpc")
     def test_student_enrolment_rejects_invalid_course_uuid(self, rpc):
