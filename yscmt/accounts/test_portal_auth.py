@@ -160,6 +160,79 @@ class SupabasePortalAuthenticationTests(SimpleTestCase):
         request.user = principal
         self.assertFalse(IsPortalAdmin().has_permission(request, None))
 
+    @patch("accounts.portal_views.call_portal_rpc")
+    def test_student_course_list_uses_scoped_rpc(self, rpc):
+        from .portal_views import PortalCourseListAPIView
+        principal = PortalPrincipal(
+            id=UUID("7e3f65a2-72e9-4f0f-9a93-4e7d5b123456"),
+            email="student@example.com",
+            role="student",
+            full_name="Test Student",
+            phone="",
+        )
+        rpc.return_value = [{
+            "id": "c8b56b9d-7199-4e6f-8a22-4a2f8c3c1234",
+            "title": "Python Basics",
+            "enrollment_status": "approved",
+        }]
+        request = APIRequestFactory().get(
+            "/api/portal/v1/courses/",
+            HTTP_AUTHORIZATION="Bearer test-user-token",
+        )
+        from rest_framework.test import force_authenticate
+        force_authenticate(request, user=principal)
+        result = PortalCourseListAPIView.as_view()(request)
+
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.data["results"][0]["title"], "Python Basics")
+        rpc.assert_called_once_with(request, "portal_list_courses")
+
+    @patch("accounts.portal_views.call_portal_rpc")
+    def test_course_lessons_are_requested_through_gated_rpc(self, rpc):
+        from .portal_views import PortalCourseLessonsAPIView
+        principal = PortalPrincipal(
+            id=UUID("7e3f65a2-72e9-4f0f-9a93-4e7d5b123456"),
+            email="student@example.com",
+            role="student",
+            full_name="Test Student",
+            phone="",
+        )
+        rpc.return_value = []
+        course_id = UUID("c8b56b9d-7199-4e6f-8a22-4a2f8c3c1234")
+        request = APIRequestFactory().get(
+            f"/api/portal/v1/courses/{course_id}/lessons/",
+            HTTP_AUTHORIZATION="Bearer test-user-token",
+        )
+        from rest_framework.test import force_authenticate
+        force_authenticate(request, user=principal)
+        result = PortalCourseLessonsAPIView.as_view()(request, course_id=course_id)
+
+        self.assertEqual(result.status_code, 200)
+        self.assertEqual(result.data["results"], [])
+        rpc.assert_called_once_with(
+            request,
+            "portal_get_course_lessons",
+            {"p_course_id": str(course_id)},
+        )
+
+    @patch("accounts.portal_views.call_portal_rpc")
+    def test_instructor_is_denied_student_course_catalogue(self, rpc):
+        from .portal_views import PortalCourseListAPIView
+        principal = PortalPrincipal(
+            id=UUID("7e3f65a2-72e9-4f0f-9a93-4e7d5b123456"),
+            email="instructor@example.com",
+            role="instructor",
+            full_name="Test Instructor",
+            phone="",
+        )
+        request = APIRequestFactory().get("/api/portal/v1/courses/")
+        from rest_framework.test import force_authenticate
+        force_authenticate(request, user=principal)
+        result = PortalCourseListAPIView.as_view()(request)
+
+        self.assertEqual(result.status_code, 403)
+        rpc.assert_not_called()
+
     def test_student_role_cannot_access_admin_permission(self):
         principal = PortalPrincipal(
             id=UUID("7e3f65a2-72e9-4f0f-9a93-4e7d5b123456"),
