@@ -13,7 +13,7 @@ class PortalDataUnavailable(APIException):
     default_code = "portal_data_unavailable"
 
 
-def call_portal_rpc(request, function_name, payload=None, max_response_bytes=262144):
+def call_portal_rpc(request, function_name, payload=None, max_response_bytes=1048576):
     """Call an allow-listed RPC using only the caller's Supabase access token."""
     allowed = {
         "portal_list_courses",
