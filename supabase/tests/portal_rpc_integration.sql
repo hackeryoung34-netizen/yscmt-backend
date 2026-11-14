@@ -171,13 +171,22 @@ begin
 end;
 $tests$;
 
--- Browser roles can execute narrow RPCs, but cannot directly read business tables.
+-- Browser roles can execute narrow RPCs, but cannot directly read or mutate business tables.
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
 set role authenticated;
 do $permissions$
 begin
   begin
     perform 1 from public.courses;
     raise exception 'Authenticated browser role unexpectedly read courses directly.';
+  exception when insufficient_privilege then
+    null;
+  end;
+  begin
+    update public.enrollments set status = 'approved'
+    where user_id = auth.uid()
+      and course_id = '20000000-0000-4000-8000-000000000001';
+    raise exception 'Student browser role unexpectedly approved its own enrolment.';
   exception when insufficient_privilege then
     null;
   end;
