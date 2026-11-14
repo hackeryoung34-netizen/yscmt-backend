@@ -111,3 +111,27 @@ A read-only review of representative Hatchable handlers confirms that the replac
 - Admin student list: `api/admin/students.js` reads contact details and enrolment counts. Restrict this endpoint to trusted admin role and audit access where appropriate.
 
 These handlers were inspected as source code only. No API or database behavior was changed.
+
+
+## 8. Initial database implementation — applied 2026-11-14
+
+The first two migrations have now been applied to Supabase project `wzpkfjnymsxczbkiukrp`:
+
+- `supabase/migrations/202611140001_initial_student_portal.sql`
+- `supabase/migrations/202611140002_secure_private_tables_and_indexes.sql`
+
+Current destination layout:
+- 19 public application tables, including `user_profiles` (which replaces the legacy `users` + `student_profiles) and the 17 course/enrolment/learning/exam/payment/classroom/audit tables.
+- 2 private tables: `private.legacy_user_map` and `private.site_settings`.
+- All 21 destination tables have RLS enabled. The 19 public application tables and 2 private tables intentionally have no client-facing policies, so browser roles are denied by default. `user_profiles` has only self-read/self-update policies and no role field.
+- All application business tables have privileges revoked from `anon` and `authenticated`; trusted backend access will be server-side only. The private schema is not granted to browser roles.
+- Foreign-key lookup indexes were added after the performance advisor identified missing indexes.
+
+Verification after apply:
+- Supabase migration history records both migrations.
+- Read-only catalog query confirmed RLS enabled on every public/private table.
+- Health advisor returned no findings.
+- Security advisor reports INFO-level `rls_enabled_no_policy` notices on 20 tables. This is expected for the current deny-by-default server-only design, not a missing-RLS exposure; those tables have RLS enabled and no browser grants. Do not add broad policies just to silence the informational notice.
+- No source rows, user accounts, payment records, secrets, or files have been imported.
+
+Important next steps before the frontend can use this schema: implement the trusted backend API, role provisioning, Auth account mapping/invitation workflow, and explicit tests for anonymous/student/instructor/admin access. Do not connect the existing React frontend directly to the business tables or publish any secret key.
