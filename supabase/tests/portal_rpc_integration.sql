@@ -74,6 +74,7 @@ do $tests$
 declare
   v_role text;
   v_status text;
+  v_enrollment_id uuid;
   v_count integer;
   v_progress record;
   v_session uuid;
@@ -94,7 +95,7 @@ begin
   select count(*) into v_count from public.portal_list_courses();
   if v_count <> 1 then raise exception 'Expected one active course for the student.'; end if;
 
-  select status into v_status
+  select id, status into v_enrollment_id, v_status
   from public.portal_create_enrollment('20000000-0000-4000-8000-000000000001');
   if v_status <> 'pending' then raise exception 'Student enrolment must be pending.'; end if;
 
@@ -126,7 +127,7 @@ begin
   select * into v_payment
   from public.portal_prepare_paystack_payment(
     auth.uid(),
-    '20000000-0000-4000-8000-000000000001'
+    v_enrollment_id
   );
   v_reference := v_payment.reference;
   if v_payment.amount_kobo <> 100000 or v_payment.currency <> 'NGN'
