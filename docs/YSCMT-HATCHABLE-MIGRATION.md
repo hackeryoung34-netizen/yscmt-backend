@@ -82,7 +82,7 @@ Before any public deployment:
 
 - Supabase organization `Community`; project `YSCMT-Student-Portal` is ACTIVE_HEALTHY in `eu-west-3` on the Free plan.
 - Supabase migrations 001–004 are applied: 19 public tables and 3 private tables, all 22 with RLS enabled. Browser access to business tables remains denied by default.
-- Supabase migrations 005–009 (identity, course reads, pending enrolment, lesson progress, timed exams) are committed to GitHub but not applied.
+- Supabase migrations 005–010 (identity, course reads, pending enrolment, lesson progress, timed exams, Paystack payment) are committed to GitHub but not applied.
 - Vercel project `yscmtenterprise` has the intended production domains. A separate preview branch `migration/student-portal-preview` has a READY deployment and GitHub static checks pass.
 - Vercel SSO protection remains enabled for non-custom preview domains.
 - No VPS has been purchased. No production DNS/routing, main website, Hatchable portal, Auth users, or source data have been changed/imported.
