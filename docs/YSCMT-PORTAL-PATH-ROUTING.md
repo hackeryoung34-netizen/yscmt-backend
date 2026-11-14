@@ -49,3 +49,12 @@ The user explicitly chose a path on the existing domain, not a subdomain. Keep t
 - Do not edit production website routing, deploy to production, promote a deployment, import/modify live data, enable a paid Supabase plan, purchase a VPS, or disable/delete Hatchable without explicit approval.
 - Before any proxy rewrite is written, verify the actual portal deployment URL and test it independently. Never use a guessed Vercel URL.
 - Report what was actually checked and distinguish a plan from an implemented or deployed route.
+
+
+## No-VPS preview decision (2026-11-14)
+
+The independent portal's first hosting model is Vercel static hosting + Supabase Auth/Postgres/RPC. A private VPS is not required for the initial student portal. The website repository now has a preview-only branch, `migration/student-portal-preview`, with the portal UI under `/portal/` and SPA rewrites in that branch only. Vercel built the preview successfully (READY). Its preview deployment is protected by Vercel SSO.
+
+The production project/domain routing is unchanged. Do not merge the preview branch or add the production `/portal` rewrite until the user explicitly approves cutover. The frontend uses only the Supabase publishable key and caller JWT; no service-role key is present in browser code. Registration is disabled during preview.
+
+See `docs/YSCMT-NO-VPS-PORTAL-ARCHITECTURE.md` for runtime, security, cost, and release gates.
