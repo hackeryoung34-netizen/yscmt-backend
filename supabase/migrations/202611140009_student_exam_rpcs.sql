@@ -224,9 +224,23 @@ begin
   end if;
 
   if now() >= v_session.started_at + make_interval(mins => v_duration) then
-    update public.exam_sessions set submitted_at = v_submitted_at
+    -- A timeout is a completed failed attempt, not an exception: raising here
+    -- would roll back the session update and leave the session open.
+    insert into public.exam_attempts (
+      exam_session_id, exam_id, user_id, answers, score, passed, started_at, submitted_at
+    )
+    values (
+      v_session.id, v_session.exam_id, v_user_id, '{}'::jsonb,
+      0, false, v_session.started_at, v_submitted_at
+    )
+    returning id into v_attempt_id;
+
+    update public.exam_sessions
+    set submitted_at = v_submitted_at
     where id = v_session.id and user_id = v_user_id;
-    raise exception using errcode = '22023', message = 'Exam time has expired.';
+
+    return query select v_attempt_id, 0, false, v_submitted_at;
+    return;
   end if;
 
   if not exists (
