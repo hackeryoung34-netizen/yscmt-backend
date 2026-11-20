@@ -95,6 +95,17 @@ begin
   end if;
 
   if found then
+    -- Preserve a failed attempt when the student returns after the timer expired.
+    -- Otherwise closing the session here would silently discard the timed-out exam.
+    insert into public.exam_attempts (
+      exam_session_id, exam_id, user_id, answers, score, passed, started_at, submitted_at
+    )
+    values (
+      v_session_id, p_exam_id, v_user_id, '{}'::jsonb, 0, false,
+      v_started_at, now()
+    )
+    on conflict (exam_session_id) where exam_session_id is not null do nothing;
+
     update public.exam_sessions
     set submitted_at = now()
     where id = v_session_id and user_id = v_user_id and submitted_at is null;
