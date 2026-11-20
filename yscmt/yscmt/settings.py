@@ -12,12 +12,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Security
 # ==========================================================
 
-SECRET_KEY = os.environ.get(
-    "SECRET_KEY",
-    "YSCMTCommunity2026SuperSecureJWTSecretKey123456789ABCDEFG",
-)
-
-DEBUG = os.environ.get("DEBUG", "True") == "True"
+DEBUG = os.environ.get("DEBUG", "False").strip().lower() == "true"
+SECRET_KEY = os.environ.get("SECRET_KEY", "").strip()
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = "local-development-only-change-before-deploy"
+    else:
+        from django.core.exceptions import ImproperlyConfigured
+        raise ImproperlyConfigured("SECRET_KEY must be configured in the deployment environment.")
 
 # Frontend URL used for public certificate verification links
 FRONTEND_URL = os.environ.get(
@@ -31,6 +33,14 @@ ALLOWED_HOSTS = [
     "0.0.0.0",
     "yscmt-backend.onrender.com",
     "yscmtcommunty-production.up.railway.app",
+    "yscmtenterprise.ng",
+    "www.yscmtenterprise.ng",
+    ".vercel.app",
+]
+ALLOWED_HOSTS += [
+    host.strip()
+    for host in os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",")
+    if host.strip()
 ]
 
 # ==========================================================
@@ -111,9 +121,13 @@ WSGI_APPLICATION = "yscmt.wsgi.application"
 # Database
 # ==========================================================
 
+# The independent portal API reads/writes Supabase through caller-scoped RPCs.
+# The ephemeral SQLite fallback exists only so Django can initialize on Vercel;
+# it is NOT a persistent database and must never be used for student records.
+# Configure DATABASE_URL only if a separately reviewed legacy Django feature needs it.
 DATABASES = {
     "default": dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}"
+        default="sqlite:////tmp/yscmt-vercel-ephemeral.sqlite3"
     )
 }
 # ==========================================================

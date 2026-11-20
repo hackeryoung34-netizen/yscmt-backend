@@ -1,0 +1,88 @@
+name: Portal API tests
+
+on:
+  pull_request:
+    branches: [main, migration/independent-portal]
+    paths:
+      - "yscmt/**"
+      - "supabase/**"
+      - "docs/**"
+      - ".github/workflows/portal-api-tests.yml"
+  push:
+    branches: [migration/independent-portal]
+    paths:
+      - "yscmt/**"
+      - "supabase/**"
+      - "docs/**"
+      - ".github/workflows/portal-api-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  django-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: yscmt
+    env:
+      SECRET_KEY: ci-only-not-a-production-secret
+      DEBUG: "False"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: yscmt/requirements.txt
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run portal API tests
+        run: python manage.py test accounts.test_portal_auth --verbosity 2
+
+  supabase-rpc-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: yscmt_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d yscmt_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGPASSWORD: postgres
+      PGHOST: localhost
+      PGUSER: postgres
+      PGDATABASE: yscmt_test
+      PG_CONTAINER: ${{ job.services.postgres.id }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bootstrap isolated Supabase Auth test surface
+        run: cat supabase/tests/portal_test_bootstrap.sql | docker exec -i "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d yscmt_test
+      - name: Apply all staged portal migrations to disposable PostgreSQL
+        run: |
+          for migration in supabase/migrations/*.sql; do
+            echo "Applying $migration"
+            cat "$migration" | docker exec -i "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d yscmt_test
+          done
+      - name: Run Supabase RPC integration tests
+        run: echo "Running portal SQL integration suite" && cat supabase/tests/portal_rpc_integration.sql | docker exec -i "$PG_CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d yscmt_test
+
+  paystack-edge-function-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check Paystack Edge Function
+        run: deno check supabase/functions/paystack-payment/index.ts
