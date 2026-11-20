@@ -137,6 +137,13 @@ declare
   v_practice_id uuid;
   v_reference text;
   v_gateway jsonb;
+  v_admin_result record;
+  v_second_enrollment_id uuid;
+  v_admin_enrollment_id uuid;
+  v_new_course_id uuid;
+  v_new_lesson_id uuid;
+  v_new_exam_id uuid;
+  v_new_question_id uuid;
 begin
   select role into v_role from private.user_roles
   where user_id = auth.uid();
