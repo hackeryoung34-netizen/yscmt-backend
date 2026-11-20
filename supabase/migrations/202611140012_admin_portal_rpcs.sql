@@ -121,7 +121,7 @@ begin
   ) then
     raise exception using errcode = '42501', message = 'Administrator access is required.';
   end if;
-  if p_status not in ('approved','rejected','completed')
+  if p_status is null or p_status not in ('approved','rejected','completed')
      or coalesce(length(p_note),0) > 2000 then
     raise exception using errcode = '22023', message = 'Invalid enrolment review details.';
   end if;
@@ -282,7 +282,7 @@ begin
   ) then
     raise exception using errcode = '42501', message = 'Administrator access is required.';
   end if;
-  if p_status not in ('approved','rejected') or coalesce(length(p_note),0) > 2000 then
+  if p_status is null or p_status not in ('approved','rejected') or coalesce(length(p_note),0) > 2000 then
     raise exception using errcode = '22023', message = 'Invalid payment review details.';
   end if;
 
@@ -414,7 +414,7 @@ begin
   ) then
     raise exception using errcode = '42501', message = 'Administrator access is required.';
   end if;
-  if p_status not in ('reviewing','approved','rejected')
+  if p_status is null or p_status not in ('reviewing','approved','rejected')
      or coalesce(length(p_notes),0) > 2000 then
     raise exception using errcode = '22023', message = 'Invalid practice review details.';
   end if;
