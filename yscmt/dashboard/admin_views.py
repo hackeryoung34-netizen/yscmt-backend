@@ -17,7 +17,10 @@ class AdminDashboardAPIView(APIView):
         return Response({
             "courses": Course.objects.count(),
             "lessons": Lesson.objects.count(),
-            "students": User.objects.count(),
+            "students": User.objects.filter(
+                is_staff=False,
+                is_superuser=False,
+            ).count(),
             "quiz_attempts": QuizAttempt.objects.count(),
             "certificates": Certificate.objects.count(),
             "payments": Payment.objects.count(),
