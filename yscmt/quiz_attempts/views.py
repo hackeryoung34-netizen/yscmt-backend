@@ -6,6 +6,7 @@ from .models import QuizAttempt
 from .serializers import QuizAttemptSerializer
 from quizzes.models import Quiz
 from quiz_questions.models import Question
+from enrollments.models import Enrollment
 
 
 class QuizAttemptViewSet(viewsets.ModelViewSet):
@@ -32,6 +33,17 @@ class QuizAttemptViewSet(viewsets.ModelViewSet):
             return Response(
                 {"error": "Quiz not found"},
                 status=status.HTTP_404_NOT_FOUND,
+            )
+
+        is_enrolled = Enrollment.objects.filter(
+            student=request.user,
+            course=quiz.course,
+        ).exists()
+
+        if not is_enrolled:
+            return Response(
+                {"error": "You must be enrolled in this course to attempt its quizzes."},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         questions = Question.objects.filter(quiz=quiz)
