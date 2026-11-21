@@ -30,7 +30,21 @@ class ProfileAPIView(APIView):
         user = request.user
         user.first_name = request.data.get("first_name", user.first_name)
         user.last_name = request.data.get("last_name", user.last_name)
-        user.email = request.data.get("email", user.email)
+        if "email" in request.data:
+            email = request.data.get("email", "")
+            if not isinstance(email, str):
+                return Response(
+                    {"email": ["Enter a valid email address."]},
+                    status=400,
+                )
+            email = email.strip().lower()
+            if email and User.objects.filter(email__iexact=email).exclude(pk=user.pk).exists():
+                return Response(
+                    {"email": ["This email address is already in use."]},
+                    status=400,
+                )
+            user.email = email
+
         user.save()
         return Response({
             "id": user.id,
