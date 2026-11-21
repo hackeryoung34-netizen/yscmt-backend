@@ -220,6 +220,8 @@ CORS_ALLOWED_ORIGINS = [
     # Production
     "https://yscmt-react.vercel.app",
     "https://yscmt-community.vercel.app",
+    "https://yscmtenterprise.ng",
+    "https://www.yscmtenterprise.ng",
 ]
 
 # Allow Vercel preview deployments
@@ -235,6 +237,8 @@ CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:8000",
     "https://yscmt-react.vercel.app",
     "https://yscmt-community.vercel.app",
+    "https://yscmtenterprise.ng",
+    "https://www.yscmtenterprise.ng",
 ]
 
 # ==========================================================
