@@ -10,15 +10,10 @@ class ProgressListCreateAPIView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return LessonProgress.objects.filter(
-            student=self.request.user
-        )
+        return LessonProgress.objects.filter(student=self.request.user)
 
     def perform_create(self, serializer):
-        serializer.save(
-            student=self.request.user,
-            completed=True
-        )
+        serializer.save(student=self.request.user, completed=True)
 
 
 class ProgressDetailAPIView(generics.RetrieveUpdateAPIView):
@@ -26,6 +21,4 @@ class ProgressDetailAPIView(generics.RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return LessonProgress.objects.filter(
-            student=self.request.user
-        )
+        return LessonProgress.objects.filter(student=self.request.user)
