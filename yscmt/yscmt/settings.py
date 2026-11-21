@@ -17,7 +17,7 @@ SECRET_KEY = os.environ.get(
     "YSCMTCommunity2026SuperSecureJWTSecretKey123456789ABCDEFG",
 )
 
-DEBUG = os.environ.get("DEBUG", "True") == "True"
+DEBUG = os.environ.get("DEBUG", "False").strip().lower() == "true"
 
 # Frontend URL used for public certificate verification links
 FRONTEND_URL = os.environ.get(
