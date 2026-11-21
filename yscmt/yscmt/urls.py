@@ -4,13 +4,13 @@ from django.contrib import admin
 from django.urls import path, include
 from django.http import JsonResponse
 
-from django.conf import settings
-from django.conf.urls.static import static
-
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
+
+from accounts.views import AdminStudentListAPIView
+
 
 def home(request):
     return JsonResponse({
@@ -19,28 +19,18 @@ def home(request):
         "api": "/api/"
     })
 
+
 urlpatterns = [
-
-    # Home
     path("", home),
-
     path("admin/", admin.site.urls),
 
     # Authentication
     path("api/auth/", include("accounts.urls")),
+    path("api/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
 
-    # JWT Authentication
-    path(
-        "api/token/",
-        TokenObtainPairView.as_view(),
-        name="token_obtain_pair",
-    ),
-
-    path(
-        "api/token/refresh/",
-        TokenRefreshView.as_view(),
-        name="token_refresh",
-    ),
+    # Staff-only student directory
+    path("api/students/", AdminStudentListAPIView.as_view(), name="admin-student-list"),
 
     # Main Apps
     path("api/courses/", include("courses.urls")),
@@ -57,12 +47,6 @@ urlpatterns = [
 ]
 
 if settings.DEBUG:
-    urlpatterns += static(
-        settings.MEDIA_URL,
-        document_root=settings.MEDIA_ROOT,
-    )
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
-urlpatterns += static(
-    settings.MEDIA_URL,
-    document_root=settings.MEDIA_ROOT
-)
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
