@@ -1,41 +1,46 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated
 
 from .models import Lesson
 from .serializers import LessonSerializer
 
 
 class LessonListAPIView(APIView):
-
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        lessons = Lesson.objects.select_related("course")
+
+        if not request.user.is_staff:
+            lessons = lessons.filter(
+                course__enrollments__student=request.user
+            )
 
         course_id = request.GET.get("course")
-
-        lessons = Lesson.objects.all()
-
         if course_id:
             lessons = lessons.filter(course_id=course_id)
 
         serializer = LessonSerializer(
-            lessons,
+            lessons.distinct(),
             many=True
         )
-
         return Response(serializer.data)
 
 
 class LessonDetailAPIView(APIView):
-
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, pk):
+        lessons = Lesson.objects.select_related("course")
+
+        if not request.user.is_staff:
+            lessons = lessons.filter(
+                course__enrollments__student=request.user
+            )
 
         try:
-            lesson = Lesson.objects.get(pk=pk)
-
+            lesson = lessons.get(pk=pk)
         except Lesson.DoesNotExist:
             return Response(
                 {"error": "Lesson not found"},
@@ -43,5 +48,4 @@ class LessonDetailAPIView(APIView):
             )
 
         serializer = LessonSerializer(lesson)
-
         return Response(serializer.data)
