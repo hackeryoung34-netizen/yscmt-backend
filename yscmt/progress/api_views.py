@@ -8,6 +8,7 @@ from .serializers import LessonProgressSerializer
 
 from lessons.models import Lesson
 from certificates.models import Certificate
+from enrollments.models import Enrollment
 
 from uuid import uuid4
 
@@ -40,6 +41,19 @@ class LessonProgressAPIView(generics.GenericAPIView):
                     "detail": "Lesson not found."
                 },
                 status=status.HTTP_404_NOT_FOUND,
+            )
+
+        is_enrolled = Enrollment.objects.filter(
+            student=request.user,
+            course=lesson.course,
+        ).exists()
+
+        if not is_enrolled:
+            return Response(
+                {
+                    "detail": "You must be enrolled in this course to record lesson progress."
+                },
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         progress, created = LessonProgress.objects.get_or_create(
