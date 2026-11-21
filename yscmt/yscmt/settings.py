@@ -2,6 +2,7 @@ from pathlib import Path
 from datetime import timedelta
 import os
 import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 # ==========================================================
 # Base Directory
 # ==========================================================
@@ -12,12 +13,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Security
 # ==========================================================
 
-SECRET_KEY = os.environ.get(
-    "SECRET_KEY",
-    "YSCMTCommunity2026SuperSecureJWTSecretKey123456789ABCDEFG",
-)
-
 DEBUG = os.environ.get("DEBUG", "False").strip().lower() == "true"
+
+SECRET_KEY = os.environ.get("SECRET_KEY")
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = "django-insecure-local-development-only-key"
+    else:
+        raise ImproperlyConfigured("SECRET_KEY must be configured in production.")
 
 # Frontend URL used for public certificate verification links
 FRONTEND_URL = os.environ.get(
@@ -30,8 +33,12 @@ ALLOWED_HOSTS = [
     "localhost",
     "0.0.0.0",
     "yscmt-backend.onrender.com",
+    "yscmt-backend-v2.onrender.com",
     "yscmtcommunty-production.up.railway.app",
 ]
+RENDER_EXTERNAL_HOSTNAME = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
 # ==========================================================
 # Installed Apps
@@ -111,9 +118,15 @@ WSGI_APPLICATION = "yscmt.wsgi.application"
 # Database
 # ==========================================================
 
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL and not DEBUG:
+    raise ImproperlyConfigured("DATABASE_URL must be configured in production.")
+
 DATABASES = {
     "default": dj_database_url.config(
-        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}"
+        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}" if DEBUG else None,
+        conn_max_age=600,
+        ssl_require=not DEBUG,
     )
 }
 # ==========================================================
