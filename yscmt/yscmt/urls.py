@@ -39,6 +39,7 @@ urlpatterns = [
     path("api/progress/", include("progress.urls")),
     path("api/enrollments/", include("enrollments.urls")),
     path("api/certificates/", include("certificates.urls")),
+    path("api/payments/", include("payments.urls")),
 
     # Quiz System
     path("api/", include("quizzes.urls")),
