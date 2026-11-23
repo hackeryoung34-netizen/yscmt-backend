@@ -1,5 +1,5 @@
 from rest_framework.authentication import BaseAuthentication
-from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.exceptions import AuthenticationFailed\nfrom django.core.exceptions import ValidationError
 from rest_framework_simplejwt.tokens import AccessToken
 from rest_framework_simplejwt.exceptions import TokenError
 from .models import PortalIdentity
@@ -18,7 +18,7 @@ class PortalJWTAuthentication(BaseAuthentication):
             if not identity_id:
                 raise AuthenticationFailed("This token is not a Student Portal token.")
             identity = PortalIdentity.objects.get(pk=identity_id, is_active=True)
-        except (TokenError, PortalIdentity.DoesNotExist, ValueError, TypeError):
+        except (TokenError, PortalIdentity.DoesNotExist, ValidationError, ValueError, TypeError):
             raise AuthenticationFailed("Invalid or expired portal session.")
         return identity, token
 
