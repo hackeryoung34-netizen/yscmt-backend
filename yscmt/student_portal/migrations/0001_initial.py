@@ -60,6 +60,7 @@ class Migration(migrations.Migration):
                 ("course", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="enrollments", to="student_portal.portalcourse")),
                 ("student", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="enrollments", to="student_portal.portalidentity")),
             ],
+            options={"ordering": ["-created_at"]},
         ),
         migrations.CreateModel(
             name="PortalLessonProgress",
