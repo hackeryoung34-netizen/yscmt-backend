@@ -19,7 +19,7 @@ class StudentPortalAPITests(TestCase):
         self.assertEqual(response.status_code, 200)
         return response.data["access"]
 
-    def test_login_and_profile(self):
+    def test_registration_creates_student_only(self):\n        response = self.client.post("/api/auth/register/", {"username": "newstudent", "email": "new@example.test", "password": "UniqueStrong!2026"}, format="json")\n        self.assertEqual(response.status_code, 201)\n        identity = PortalIdentity.objects.get(username="newstudent")\n        self.assertEqual(identity.role, PortalIdentity.ROLE_STUDENT)\n        self.assertTrue(identity.check_password("UniqueStrong!2026"))\n\n    def test_login_and_profile(self):
         token = self.token_for("student1")
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
         response = self.client.get("/api/portal/v1/me/")
