@@ -1,0 +1,52 @@
+name: Student Portal preview checks
+
+on:
+  push:
+    branches:
+      - migration/neon-django-preview
+  pull_request:
+    branches:
+      - migration/neon-django-preview
+
+jobs:
+  django-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: yscmt_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d yscmt_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: yscmt
+    env:
+      DEBUG: "true"
+      SECRET_KEY: ci-only-not-a-production-secret
+      PORTAL_JWT_SIGNING_KEY: ci-only-portal-jwt-secret
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/yscmt_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: yscmt/requirements.txt
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+      - name: Django system checks
+        run: python manage.py check
+      - name: Check migration files
+        run: python manage.py makemigrations --check --dry-run
+      - name: Apply migrations to disposable PostgreSQL
+        run: python manage.py migrate --noinput
+      - name: Run Student Portal API tests
+        run: python manage.py test student_portal --verbosity 2
