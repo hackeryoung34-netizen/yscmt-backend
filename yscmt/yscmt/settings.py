@@ -63,6 +63,7 @@ INSTALLED_APPS = [
 
     # Local Apps
     "accounts",
+    "student_portal.apps.StudentPortalConfig",
     "courses",
     "lessons",
     "enrollments",
