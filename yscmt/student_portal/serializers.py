@@ -75,3 +75,6 @@ class PortalLessonSerializer(serializers.ModelSerializer):
     class Meta:
         model = PortalLesson
         fields = ["id", "title", "content", "video_url", "sort_order"]
+
+class PortalEnrollmentCreateSerializer(serializers.Serializer):
+    course_id = serializers.UUIDField()
