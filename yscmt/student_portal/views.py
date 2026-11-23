@@ -7,7 +7,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .authentication import PortalJWTAuthentication
 from .models import PortalIdentity, PortalCourse, PortalLesson, PortalEnrollment
-from .serializers import PortalRegisterSerializer, PortalTokenSerializer, PortalCourseSerializer, PortalLessonSerializer, PortalEnrollmentCreateSerializer
+from .serializers import PortalRegisterSerializer, PortalTokenSerializer, PortalCourseSerializer, PortalLessonSerializer, PortalEnrollmentCreateSerializer, PortalEnrollmentCreateSerializer
 
 class PortalRegisterAPIView(generics.CreateAPIView):
     serializer_class = PortalRegisterSerializer
@@ -86,9 +86,9 @@ class PortalEnrollmentCreateAPIView(APIView):
     def post(self, request):
         if request.user.role != PortalIdentity.ROLE_STUDENT:
             raise PermissionDenied("Student access only.")
-        course_id = request.data.get("course_id")
-        if not course_id:
-            return Response({"course_id": ["A course UUID is required."]}, status=400)
+        input_serializer = PortalEnrollmentCreateSerializer(data=request.data)
+        input_serializer.is_valid(raise_exception=True)
+        course_id = input_serializer.validated_data["course_id"]
         course = PortalCourse.objects.filter(pk=course_id, is_active=True).first()
         if not course:
             raise NotFound("Active course not found.")
