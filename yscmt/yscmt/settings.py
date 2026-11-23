@@ -211,6 +211,7 @@ SIMPLE_JWT = {
     "ROTATE_REFRESH_TOKENS": False,
     "BLACKLIST_AFTER_ROTATION": False,
     "UPDATE_LAST_LOGIN": True,
+    "SIGNING_KEY": os.environ.get("PORTAL_JWT_SIGNING_KEY", SECRET_KEY),
 }
 
 # ==========================================================
