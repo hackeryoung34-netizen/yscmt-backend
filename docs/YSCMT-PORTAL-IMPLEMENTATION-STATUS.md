@@ -24,7 +24,7 @@ This is a first vertical slice, not full feature parity with the Hatchable/Supab
 
 ## Not yet done
 
-- GitHub Actions has not yet been observed passing.
+- GitHub Actions PostgreSQL preview workflow passed on commit `a4d559b730e79297af590d9343edfd31a69bcb33` (run [45257683799](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45257683799)). Django checks, migration drift check, full Django migrations against disposable PostgreSQL 16, and Student Portal API tests all passed.
 - No migration has been run against the Neon database.
 - No real student records, payment data, password hashes, receipts, or certificates have been copied.
 - No Render service has been created.
