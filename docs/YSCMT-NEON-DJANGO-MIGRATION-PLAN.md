@@ -23,7 +23,7 @@ The existing Django project also contains legacy models tied to Django's built-i
 
 ## 3. Implementation sequence
 
-1. Inventory the current Django models, migrations, portal endpoints, frontend API contract, and source Hatchable field mapping.
+1. Inventory the current Django models, migrations, portal endpoints, frontend API contract, and source Hatchable field mapping. (Source schema inventory is documented in `docs/YSCMT-PORTAL-SOURCE-SCHEMA-INVENTORY.md`.)
 2. Define a portal-native identity model and JWT authentication adapter, isolated from legacy Django authentication. Use trusted database role fields; never accept role claims from user-editable profile data.
 3. Implement Django ORM models for portal courses, lessons, enrolments, lesson progress, exams, exam sessions/attempts, certificates, payment records, practice submissions, classrooms, attendance, messages, announcements, and audit events.
 4. Implement DRF serializers, views, and permissions. Derive the student identity from the verified JWT; never accept a user ID, payment state, exam score, certificate status, or staff role from the request body.
@@ -31,7 +31,7 @@ The existing Django project also contains legacy models tied to Django's built-i
 6. Generate Django migrations and apply them only to the new empty Neon development database after reviewing the migration plan.
 7. Add automated tests for unauthenticated access, student isolation, instructor/admin permissions, enrolment gating, lesson progress ownership, exam answer-key secrecy, timed exam expiry/idempotency, and payment verification boundaries.
 8. Run migrations and tests against a disposable PostgreSQL database in CI before connecting the preview service to Neon.
-9. Deploy a non-production Render preview only after the owner chooses the Render workspace. Use a free plan unless the owner separately approves a paid plan. No service should be created in an ambiguous workspace.
+9. Deploy a non-production Render preview only after the owner chooses the Render workspace. Use a free plan unless the owner separately approves a paid plan. The owner selected the `My Workspace` workspace (`tea-d7ofvkjeo5us73e6tdgg`, connected link `hackeryoung34-netizen`). A Free preview service may be created there after implementation and tests are ready.
 10. Integrate the Vercel preview with the preview API, verify CORS/CSRF/host settings, and test end-to-end using synthetic accounts and data only.
 11. Reconcile source table counts and foreign-key mappings in a separate rehearsal. Do not import real student, payment, password, receipt, or certificate data until mapping, backup, and explicit approval are complete.
 12. Obtain separate explicit approval before production routing or cutover. Keep Hatchable active and available for rollback until post-cutover acceptance is complete.
@@ -53,12 +53,19 @@ The existing Django project also contains legacy models tied to Django's built-i
 - No paid VPS, add-on, storage, or plan upgrade is authorized.
 - No production DNS, Vercel production settings, or Hatchable settings are to be changed in this phase.
 
-## 6. Current verified state
+## 6. Frontend compatibility finding
+
+The connected `yscmt-react` repository's current sign-in form posts `{username, password}` to `api/token/`, stores the returned `access` and `refresh` tokens, and its API interceptor refreshes through `api/token/refresh/`. Registration posts `{username, email, password}` to `api/auth/register/`. Therefore, a portal-native authentication implementation must either preserve this exact SimpleJWT contract for the relevant app or update a dedicated preview frontend in lockstep. Do not change the production frontend as part of backend migration. The existing frontend repo's generic LMS pages are not sufficient evidence that every Supabase portal feature is currently wired to it.
+
+The source schema includes timed exams, hidden answer keys, Paystack verification, admin review workflows, classroom, practice submissions, and audit logging. This is materially larger than the five existing `/api/portal/v1/` student routes; feature parity must be staged and tested rather than assumed from the initial course API.
+
+## 7. Current verified state
 
 - Neon project `YSCMT-Student-Portal` exists in the Yusufa organization on the Free plan.
 - Neon development branch and endpoint are ready; the database has no application tables yet.
 - Hatchable project `proj_wtjM5VcpGROw` remains active.
 - GitHub branch `migration/neon-django-preview` was created from `migration/independent-portal`.
+- Source schema inventory has been reviewed and committed at `docs/YSCMT-PORTAL-SOURCE-SCHEMA-INVENTORY.md`.
 - No Django migration has been applied to Neon; no source records have been exported/imported.
-- No Render service has been created because two Render workspaces are connected and the owner must choose the intended workspace.
+- Render workspace is now selected: `My Workspace` (`tea-d7ofvkjeo5us73e6tdgg`). It currently has no services. No preview service has been created because the backend still depends on Supabase and has not passed migration tests.
 - No production deployment, routing, DNS change, or cutover has occurred.
