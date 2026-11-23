@@ -27,7 +27,10 @@ urlpatterns = [
     path("admin/", admin.site.urls),
 
     # Independent Student Portal API (isolated from legacy Django auth)
-    path("api/portal/v1/", include("accounts.portal_urls")),
+    path("api/portal/v1/", include("student_portal.urls")),
+
+    # Portal-native registration and JWT (preview branch only)
+    path("api/auth/register/", __import__("student_portal.views", fromlist=["PortalRegisterAPIView"]).PortalRegisterAPIView.as_view()),
 
     # Legacy authentication (preserved for existing consumers)
     path("api/auth/", include("accounts.urls")),
@@ -35,7 +38,7 @@ urlpatterns = [
     # JWT Authentication
     path(
         "api/token/",
-        TokenObtainPairView.as_view(),
+        PortalTokenObtainPairView.as_view(),
         name="token_obtain_pair",
     ),
 
