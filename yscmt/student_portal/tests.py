@@ -59,3 +59,16 @@ class StudentPortalAPITests(TestCase):
         response = self.client.get(f"/api/portal/v1/courses/{self.course.pk}/lessons/")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data["results"]), 1)
+
+    def test_progress_requires_approved_enrollment_and_is_idempotent(self):
+        token = self.token_for("student1")
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+        denied = self.client.post(f"/api/portal/v1/lessons/{self.lesson.pk}/complete/")
+        self.assertEqual(denied.status_code, 403)
+        PortalEnrollment.objects.create(student=self.student, course=self.course, status=PortalEnrollment.APPROVED)
+        first = self.client.post(f"/api/portal/v1/lessons/{self.lesson.pk}/complete/")
+        second = self.client.post(f"/api/portal/v1/lessons/{self.lesson.pk}/complete/")
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(first.data["completed_at"], second.data["completed_at"])
+        progress = self.client.get(f"/api/portal/v1/courses/{self.course.pk}/progress/")
+        self.assertEqual(progress.data, {"total_lessons": 1, "completed_lessons": 1, "progress_percent": 100})
