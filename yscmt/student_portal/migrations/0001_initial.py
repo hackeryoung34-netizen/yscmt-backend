@@ -57,7 +57,7 @@ class Migration(migrations.Migration):
                 ("status", models.CharField(choices=[("pending", "Pending"), ("approved", "Approved"), ("completed", "Completed"), ("rejected", "Rejected")], default="pending", max_length=20)),
                 ("created_at", models.DateTimeField(auto_now_add=True)),
                 ("updated_at", models.DateTimeField(auto_now=True)),
-                ("course", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="enrollments", to="student_portal.portacourse")),
+                ("course", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="enrollments", to="student_portal.portalcourse")),
                 ("student", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="enrollments", to="student_portal.portalidentity")),
             ],
         ),
