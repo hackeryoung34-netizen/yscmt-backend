@@ -30,7 +30,7 @@ urlpatterns = [
     path("api/portal/v1/", include("student_portal.urls")),
 
     # Portal-native registration and JWT (preview branch only)
-    path("api/auth/register/", __import__("student_portal.views", fromlist=["PortalRegisterAPIView"]).PortalRegisterAPIView.as_view()),
+    path("api/auth/register/", PortalRegisterAPIView.as_view()),
 
     # Legacy authentication (preserved for existing consumers)
     path("api/auth/", include("accounts.urls")),
