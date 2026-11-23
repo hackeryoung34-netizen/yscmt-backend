@@ -1,5 +1,6 @@
 from rest_framework.authentication import BaseAuthentication
-from rest_framework.exceptions import AuthenticationFailed\nfrom django.core.exceptions import ValidationError
+from rest_framework.exceptions import AuthenticationFailed
+from django.core.exceptions import ValidationError
 from rest_framework_simplejwt.tokens import AccessToken
 from rest_framework_simplejwt.exceptions import TokenError
 from .models import PortalIdentity
