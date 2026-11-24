@@ -118,3 +118,11 @@ Keep Hatchable active as the production service and fallback. Do not perform pro
 - Cloudflare account operations could not proceed because the connected account did not grant authorization. No further access attempt was made, no bucket or credentials were created, and no changes were made to the Cloudflare account.
 - Neon Object Storage is enabled on the development branch, but its pricing page lists storage at $0.023/GB-month. No bucket was created because storage charges have not been approved. See [Neon pricing](https://neon.com/pricing).
 - Hatchable remains active; Neon still has no application tables or source records; no Render preview has been created; no production changes occurred.
+
+
+## Latest verification — 2026-11-24 21:14 UTC
+
+- The current branch HEAD is `5938856ef8cb7b3947e67b0a1ac10b4e90778eda`.
+- Dedicated preview CI [45488765068](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45488765068) completed successfully on that exact commit. PostgreSQL-only preview guard, Django checks, migration consistency, migrations on disposable PostgreSQL, and all Student Portal API/storage/export-audit tests passed.
+- The legacy workflow `.github/workflows/portal-api-tests.yml` still reports a separate failure with zero jobs returned; the dedicated preview workflow is the required gate and passed.
+- No production actions have been taken. Hatchable is still active, Neon application schema/data are still empty, and Render preview has not been created.
