@@ -1,6 +1,7 @@
 from django.urls import path
 from .views import (
     PortalRegisterAPIView, PortalTokenObtainPairView, PortalMeAPIView,
+    PortalPasswordResetRequestAPIView, PortalPasswordResetConfirmAPIView,
     PortalCourseListAPIView, PortalCourseDetailAPIView,
     PortalCourseLessonsAPIView, PortalEnrollmentCreateAPIView,
     PortalLessonCompleteAPIView, PortalCourseProgressAPIView,
@@ -21,6 +22,8 @@ from .views import (
 
 urlpatterns = [
     path("auth/register/", PortalRegisterAPIView.as_view(), name="portal-register"),
+    path("auth/password-reset/request/", PortalPasswordResetRequestAPIView.as_view(), name="portal-password-reset-request"),
+    path("auth/password-reset/confirm/", PortalPasswordResetConfirmAPIView.as_view(), name="portal-password-reset-confirm"),
     path("token/", PortalTokenObtainPairView.as_view(), name="portal-token"),
     path("me/", PortalMeAPIView.as_view(), name="portal-me"),
     path("courses/", PortalCourseListAPIView.as_view(), name="portal-courses"),
