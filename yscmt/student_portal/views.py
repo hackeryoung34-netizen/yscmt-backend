@@ -183,7 +183,8 @@ class PortalCourseListAPIView(APIView):
         if request.user.role != PortalIdentity.ROLE_STUDENT:
             raise PermissionDenied("Student access only.")
         courses = PortalCourse.objects.filter(is_active=True)
-        return Response({"results": PortalCourseSerializer(courses, many=True, context={"request": request}).data})
+        results = PortalCourseSerializer(courses, many=True, context={"request": request}).data
+        return Response({"courses": results, "results": results})
 
 
 class PortalCourseDetailAPIView(APIView):
@@ -1234,9 +1235,12 @@ class PortalAdminEnrollmentAPIView(APIView):
             })
         return Response({"enrolments": results, "results": results})
 
-    def post(self, request, enrollment_id):
+    def post(self, request, enrollment_id=None):
         if request.user.role != PortalIdentity.ROLE_ADMIN:
             raise PermissionDenied("Administrator access only.")
+        enrollment_id = enrollment_id or request.data.get("enrollment_id") or request.data.get("enrolment_id")
+        if not enrollment_id:
+            raise serializers.ValidationError({"enrolment_id": "An enrolment ID is required."})
         new_status = request.data.get("status")
         note = request.data.get("note", "")
         if new_status not in [PortalEnrollment.APPROVED, PortalEnrollment.REJECTED, PortalEnrollment.COMPLETED]:
@@ -1295,7 +1299,7 @@ class PortalBankReceiptUploadAPIView(APIView):
     def post(self, request):
         if request.user.role != PortalIdentity.ROLE_STUDENT:
             raise PermissionDenied("Only students can upload bank payment receipts.")
-        enrollment_id = request.data.get("enrollment_id")
+        enrollment_id = request.data.get("enrollment_id") or request.data.get("enrolment_id")
         content_type = request.data.get("content_type")
         file_name = request.data.get("file_name")
         transfer_reference = request.data.get("transfer_reference", "")
@@ -1863,7 +1867,7 @@ class PortalStudentPaymentAPIView(APIView):
     def get(self, request):
         if request.user.role != PortalIdentity.ROLE_STUDENT:
             raise PermissionDenied("Student access only.")
-        enrollment_id = request.query_params.get("enrollment_id")
+        enrollment_id = request.query_params.get("enrollment_id") or request.query_params.get("enrolment_id")
         enrollment = PortalEnrollment.objects.select_related("course").filter(
             pk=enrollment_id, student=request.user
         ).first()
