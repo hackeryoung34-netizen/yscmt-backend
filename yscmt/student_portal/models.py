@@ -162,3 +162,38 @@ class PortalExamAttempt(models.Model):
         constraints = [
             models.CheckConstraint(condition=models.Q(score__lte=100), name="portal_exam_attempt_score_max_100"),
         ]
+
+class PortalPayment(models.Model):
+    PENDING = "pending"
+    SUCCESS = "success"
+    FAILED = "failed"
+    ABANDONED = "abandoned"
+    STATUS_CHOICES = [
+        (PENDING, "Pending"),
+        (SUCCESS, "Success"),
+        (FAILED, "Failed"),
+        (ABANDONED, "Abandoned"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    enrollment = models.ForeignKey(PortalEnrollment, related_name="payments", on_delete=models.PROTECT)
+    student = models.ForeignKey(PortalIdentity, related_name="payments", on_delete=models.PROTECT)
+    reference = models.CharField(max_length=100, unique=True)
+    amount_kobo = models.PositiveBigIntegerField()
+    currency = models.CharField(max_length=3, default="NGN")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=PENDING)
+    authorization_url = models.URLField(max_length=2048, blank=True)
+    gateway_response = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["enrollment"],
+                condition=models.Q(status="pending"),
+                name="uniq_pending_portal_payment_per_enrollment",
+            ),
+            models.CheckConstraint(condition=models.Q(amount_kobo__gt=0), name="portal_payment_amount_positive"),
+        ]
