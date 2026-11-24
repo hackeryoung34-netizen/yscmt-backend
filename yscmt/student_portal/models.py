@@ -73,7 +73,7 @@ class PortalLesson(models.Model):
     course = models.ForeignKey(PortalCourse, related_name="lessons", on_delete=models.CASCADE)
     title = models.CharField(max_length=220)
     content = models.TextField(blank=True)
-    video_url = models.URLField(blank=True)
+    video_url = models.URLField(blank=True, max_length=1000)
     sort_order = models.PositiveIntegerField(default=1)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
