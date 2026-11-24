@@ -770,3 +770,19 @@ class StudentPortalAPITests(TestCase):
         )
         self.assertEqual(response.status_code, 503)
         self.assertFalse(PortalPaymentSubmission.objects.exists())
+
+    def test_admin_can_list_paystack_payments_but_students_cannot(self):
+        enrollment = PortalEnrollment.objects.create(student=self.student, course=self.course, status=PortalEnrollment.PENDING)
+        payment = PortalPayment.objects.create(
+            enrollment=enrollment, student=self.student, reference="YSCMT-TEST-REF-001",
+            amount_kobo=1500000, currency="NGN", status=PortalPayment.PENDING,
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('student1')}")
+        self.assertEqual(self.client.get("/api/portal/v1/admin/paystack-payments/").status_code, 403)
+        admin = PortalIdentity(username="paystackadmin", email="paystackadmin@example.test", role=PortalIdentity.ROLE_ADMIN)
+        admin.set_password("StrongPass!2026")
+        admin.save()
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('paystackadmin')}")
+        response = self.client.get("/api/portal/v1/admin/paystack-payments/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["results"][0]["id"], str(payment.pk))
