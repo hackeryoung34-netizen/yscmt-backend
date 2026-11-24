@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
-from .models import PortalIdentity, PortalCourse, PortalLesson, PortalEnrollment, PortalExam, PortalExamQuestion, PortalExamSession, PortalExamAttempt, PortalPayment, PortalCertificate
+from .models import PortalIdentity, PortalCourse, PortalLesson, PortalEnrollment, PortalExam, PortalExamQuestion, PortalExamSession, PortalExamAttempt, PortalPayment, PortalCertificate, PortalPracticeSubmission, PortalClassroomSession, PortalClassroomAttendance, PortalClassroomMessage, PortalClassroomAnnouncement, PortalTeacherReply
 
 class StudentPortalAPITests(TestCase):
     def setUp(self):
@@ -391,3 +391,86 @@ class StudentPortalAPITests(TestCase):
         self.assertEqual(verification.status_code, 200)
         self.assertTrue(verification.data["valid"])
         self.assertEqual(verification.data["student_name"], self.student.full_name or "YSCMT Student")
+
+def test_classroom_sessions_require_enrollment_and_join_is_idempotent(self):
+        self.approve_student()
+        now = timezone.now()
+        session = PortalClassroomSession.objects.create(
+            course=self.course, title="Live Python Class",
+            meeting_url="https://meet.example.test/python",
+            starts_at=now + timedelta(minutes=10),
+            ends_at=now + timedelta(minutes=70),
+            status="scheduled",
+        )
+        listed = self.client.get(f"/api/portal/v1/courses/{self.course.pk}/classroom/sessions/")
+        self.assertEqual(listed.status_code, 200)
+        self.assertEqual(len(listed.data["results"]), 1)
+        first = self.client.post(f"/api/portal/v1/classroom/sessions/{session.pk}/join/")
+        second = self.client.post(f"/api/portal/v1/classroom/sessions/{session.pk}/join/")
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(first.data["attendance_id"], second.data["attendance_id"])
+        self.assertEqual(PortalClassroomAttendance.objects.filter(session=session, student=self.student).count(), 1)
+
+    def test_classroom_message_requires_approved_enrollment_and_sets_student_role(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('student1')}")
+        denied = self.client.post(
+            f"/api/portal/v1/courses/{self.course.pk}/classroom/messages/",
+            {"message": "Hello class"}, format="json",
+        )
+        self.assertEqual(denied.status_code, 403)
+        PortalEnrollment.objects.create(student=self.student, course=self.course, status=PortalEnrollment.APPROVED)
+        sent = self.client.post(
+            f"/api/portal/v1/courses/{self.course.pk}/classroom/messages/",
+            {"message": "  Hello class  "}, format="json",
+        )
+        self.assertEqual(sent.status_code, 201)
+        self.assertEqual(sent.data["message"], "Hello class")
+        message = PortalClassroomMessage.objects.get(pk=sent.data["id"])
+        self.assertEqual(message.author_role, "student")
+        listed = self.client.get(f"/api/portal/v1/courses/{self.course.pk}/classroom/messages/")
+        self.assertEqual(listed.data["results"][0]["id"], str(message.pk))
+
+    def test_global_announcements_are_visible_but_course_announcements_are_gated(self):
+        PortalClassroomAnnouncement.objects.create(title="General notice", body="Welcome")
+        PortalClassroomAnnouncement.objects.create(
+            course=self.course, title="Course notice", body="Approved students only"
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('student1')}")
+        response = self.client.get(
+            f"/api/portal/v1/courses/{self.course.pk}/classroom/announcements/"
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([item["title"] for item in response.data["results"]], ["General notice"])
+        PortalEnrollment.objects.create(student=self.student, course=self.course, status=PortalEnrollment.APPROVED)
+        enrolled = self.client.get(
+            f"/api/portal/v1/courses/{self.course.pk}/classroom/announcements/"
+        )
+        self.assertEqual({item["title"] for item in enrolled.data["results"]}, {"General notice", "Course notice"})
+
+    def test_practice_submission_requires_enrollment_and_keeps_owner_scope(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('student1')}")
+        denied = self.client.post(
+            "/api/portal/v1/practice/submissions/",
+            {"lab_key": "linux-01", "title": "Linux Lab"}, format="json",
+        )
+        self.assertEqual(denied.status_code, 403)
+        PortalEnrollment.objects.create(student=self.student, course=self.course, status=PortalEnrollment.APPROVED)
+        invalid_url = self.client.post(
+            "/api/portal/v1/practice/submissions/",
+            {"lab_key": "linux-01", "title": "Linux Lab", "project_url": "http://example.test"},
+            format="json",
+        )
+        self.assertEqual(invalid_url.status_code, 400)
+        submitted = self.client.post(
+            "/api/portal/v1/practice/submissions/",
+            {"lab_key": "linux-01", "title": "Linux Lab", "submission_text": "Completed", "project_url": "https://example.test/project"},
+            format="json",
+        )
+        self.assertEqual(submitted.status_code, 201)
+        listing = self.client.get("/api/portal/v1/practice/submissions/")
+        self.assertEqual(len(listing.data["results"]), 1)
+        self.assertEqual(listing.data["results"][0]["id"], submitted.data["id"])
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('student2')}")
+        other_listing = self.client.get("/api/portal/v1/practice/submissions/")
+        self.assertEqual(other_listing.data["results"], [])
