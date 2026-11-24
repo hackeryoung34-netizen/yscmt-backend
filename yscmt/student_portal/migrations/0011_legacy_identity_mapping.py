@@ -5,6 +5,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
     dependencies = [("student_portal", "0010_source_schema_parity")]
     operations = [
+        migrations.RunSQL("CREATE SCHEMA IF NOT EXISTS private", reverse_sql=migrations.RunSQL.noop),
         migrations.AddField(
             model_name="portalidentity",
             name="avatar_url",
@@ -21,7 +22,7 @@ class Migration(migrations.Migration):
                 ("updated_at", models.DateTimeField(auto_now=True)),
                 ("identity", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="legacy_user_mappings", to="student_portal.portalidentity")),
             ],
-            options={"constraints": [
+            options={"db_table": '"private"."legacy_user_map"', "constraints": [
                 models.UniqueConstraint(fields=("source_system", "legacy_user_id"), name="uniq_portal_legacy_source_user"),
                 models.UniqueConstraint(fields=("source_system", "identity"), name="uniq_portal_legacy_source_identity"),
             ]},
@@ -37,6 +38,6 @@ class Migration(migrations.Migration):
                 ("setting_value", models.JSONField(default=dict)),
                 ("updated_at", models.DateTimeField(auto_now=True)),
             ],
-            options={"db_table": "student_portal_site_settings"},
+            options={"db_table": '"private"."site_settings"'},
         ),
     ]
