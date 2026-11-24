@@ -30,6 +30,7 @@ jobs:
         working-directory: yscmt
     env:
       DEBUG: "true"
+      PORTAL_REQUIRE_POSTGRES: "true"
       SECRET_KEY: ci-only-not-a-production-secret
       PORTAL_JWT_SIGNING_KEY: ci-only-portal-jwt-secret-with-at-least-32-bytes
       DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/yscmt_test
