@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
-from .models import PortalIdentity, PortalCourse, PortalLesson, PortalEnrollment, PortalExam, PortalExamQuestion, PortalExamSession, PortalExamAttempt, PortalPayment
+from .models import PortalIdentity, PortalCourse, PortalLesson, PortalEnrollment, PortalExam, PortalExamQuestion, PortalExamSession, PortalExamAttempt, PortalPayment, PortalCertificate
 
 class StudentPortalAPITests(TestCase):
     def setUp(self):
@@ -346,3 +346,48 @@ def test_payment_initialization_creates_secure_reference_for_new_intent(self):
         self.assertTrue(response.data["reference"].startswith("YSCMT_"))
         self.assertEqual(response.data["amount_kobo"], 250000)
         self.assertEqual(PortalPayment.objects.filter(enrollment=enrollment).count(), 1)
+
+def test_certificate_requires_full_course_completion_and_passed_exam(self):
+        exam, _, _ = self.make_exam()
+        self.approve_student()
+        denied_lessons = self.client.post(
+            f"/api/portal/v1/courses/{self.course.pk}/certificates/request/", {}, format="json"
+        )
+        self.assertEqual(denied_lessons.status_code, 400)
+
+        completed = self.client.post(f"/api/portal/v1/lessons/{self.lesson.pk}/complete/")
+        self.assertEqual(completed.status_code, 200)
+        denied_exam = self.client.post(
+            f"/api/portal/v1/courses/{self.course.pk}/certificates/request/", {}, format="json"
+        )
+        self.assertEqual(denied_exam.status_code, 400)
+
+        session = PortalExamSession.objects.create(exam=exam, student=self.student)
+        now = timezone.now()
+        PortalExamAttempt.objects.create(
+            session=session, exam=exam, student=self.student, answers={},
+            score=100, passed=True, started_at=session.started_at, submitted_at=now,
+        )
+        session.submitted_at = now
+        session.save(update_fields=["submitted_at"])
+
+        issued = self.client.post(
+            f"/api/portal/v1/courses/{self.course.pk}/certificates/request/", {}, format="json"
+        )
+        repeated = self.client.post(
+            f"/api/portal/v1/courses/{self.course.pk}/certificates/request/", {}, format="json"
+        )
+        self.assertEqual(issued.status_code, 201)
+        self.assertEqual(repeated.status_code, 201)
+        self.assertEqual(issued.data["certificate_code"], repeated.data["certificate_code"])
+        self.assertEqual(PortalCertificate.objects.filter(student=self.student, course=self.course).count(), 1)
+
+        listing = self.client.get("/api/portal/v1/certificates/")
+        self.assertEqual(listing.status_code, 200)
+        self.assertEqual(len(listing.data["results"]), 1)
+        verification = self.client.get(
+            f"/api/portal/v1/certificates/verify/{issued.data['certificate_code'].lower()}/"
+        )
+        self.assertEqual(verification.status_code, 200)
+        self.assertTrue(verification.data["valid"])
+        self.assertEqual(verification.data["student_name"], self.student.full_name or "YSCMT Student")
