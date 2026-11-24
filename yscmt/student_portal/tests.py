@@ -613,12 +613,14 @@ class StudentPortalAPITests(TestCase):
         )
         self.assertEqual(session.status_code, 201)
         self.assertEqual(session.data["status"], "scheduled")
+        self.assertEqual(PortalClassroomSession.objects.get(pk=session.data["id"]).created_by, instructor)
         announcement = self.client.post(
             f"/api/portal/v1/instructor/courses/{self.course.pk}/classroom/announcements/",
             {"title": "Welcome", "body": "Class starts soon."}, format="json",
         )
         self.assertEqual(announcement.status_code, 201)
         self.assertTrue(announcement.data["published"])
+        self.assertEqual(PortalClassroomAnnouncement.objects.get(pk=announcement.data["id"]).created_by, instructor)
         reply = self.client.post(
             f"/api/portal/v1/instructor/courses/{self.course.pk}/classroom/teacher-replies/",
             {"message": "Please review lesson one."}, format="json",
