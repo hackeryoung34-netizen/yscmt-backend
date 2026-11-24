@@ -48,6 +48,11 @@ class PortalTokenSerializer(serializers.Serializer):
         identity = PortalIdentity.objects.filter(username__iexact=username, is_active=True).first()
         if not identity or not identity.check_password(attrs["password"]):
             raise serializers.ValidationError({"detail": "Invalid username or password."})
+        if identity.must_reset_password:
+            raise serializers.ValidationError({
+                "code": "password_reset_required",
+                "detail": "Reset your password using the email link before signing in.",
+            })
         refresh = RefreshToken()
         refresh["portal_identity_id"] = str(identity.pk)
         refresh["role"] = identity.role
