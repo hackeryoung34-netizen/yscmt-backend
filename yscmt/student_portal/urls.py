@@ -13,7 +13,8 @@ from .views import (
     PortalClassroomMessageAPIView, PortalClassroomAnnouncementsAPIView,
     PortalTeacherRepliesAPIView, PortalPracticeSubmissionAPIView,
     PortalAdminEnrollmentAPIView, PortalAdminPracticeReviewAPIView, PortalAdminAuditLogAPIView,
-    PortalAdminOverviewAPIView, PortalAdminStudentListAPIView,\n    PortalAdminCourseInstructorAPIView, PortalInstructorCoursesAPIView, PortalInstructorStudentListAPIView,
+    PortalAdminOverviewAPIView, PortalAdminStudentListAPIView,
+    PortalAdminCourseInstructorAPIView, PortalInstructorCoursesAPIView, PortalInstructorStudentListAPIView,
 )
 
 urlpatterns = [
@@ -41,7 +42,11 @@ urlpatterns = [
     path("courses/<uuid:course_id>/classroom/announcements/", PortalClassroomAnnouncementsAPIView.as_view(), name="portal-classroom-announcements"),
     path("courses/<uuid:course_id>/classroom/teacher-replies/", PortalTeacherRepliesAPIView.as_view(), name="portal-teacher-replies"),
     path("practice/submissions/", PortalPracticeSubmissionAPIView.as_view(), name="portal-practice-submissions"),
-    path("admin/course-instructors/", PortalAdminCourseInstructorAPIView.as_view(), name="portal-admin-course-instructors"),\n    path("admin/course-instructors/<uuid:assignment_id>/", PortalAdminCourseInstructorAPIView.as_view(), name="portal-admin-course-instructor-delete"),\n    path("instructor/courses/", PortalInstructorCoursesAPIView.as_view(), name="portal-instructor-courses"),\n    path("instructor/courses/<uuid:course_id>/students/", PortalInstructorStudentListAPIView.as_view(), name="portal-instructor-students"),\n    path("admin/overview/", PortalAdminOverviewAPIView.as_view(), name="portal-admin-overview"),
+    path("admin/course-instructors/", PortalAdminCourseInstructorAPIView.as_view(), name="portal-admin-course-instructors"),
+    path("admin/course-instructors/<uuid:assignment_id>/", PortalAdminCourseInstructorAPIView.as_view(), name="portal-admin-course-instructor-delete"),
+    path("instructor/courses/", PortalInstructorCoursesAPIView.as_view(), name="portal-instructor-courses"),
+    path("instructor/courses/<uuid:course_id>/students/", PortalInstructorStudentListAPIView.as_view(), name="portal-instructor-students"),
+    path("admin/overview/", PortalAdminOverviewAPIView.as_view(), name="portal-admin-overview"),
     path("admin/students/", PortalAdminStudentListAPIView.as_view(), name="portal-admin-students"),
     path("admin/enrollments/", PortalAdminEnrollmentAPIView.as_view(), name="portal-admin-enrollments"),
     path("admin/enrollments/<uuid:enrollment_id>/review/", PortalAdminEnrollmentAPIView.as_view(), name="portal-admin-enrollment-review"),
