@@ -99,3 +99,12 @@ Keep Hatchable active as the production service and fallback. Do not perform pro
 5. Only after those checks, prepare a separately reviewed real-data export/import plan. No source rows or receipt files are to be imported without the owner's explicit approval.
 6. Keep Hatchable running. Do not perform production cutover, production DNS changes, or disable Hatchable.
 
+
+
+## Read-only export validator — 2026-11-24
+
+- Added `student_portal/management/commands/audit_hatchable_export.py`. It accepts a complete JSON export of the 21 source tables and performs **no database writes**.
+- It checks source-table coverage, row shapes, duplicate IDs, UUID validity, foreign-key orphans and ambiguous exam-attempt/session pairing. It emits only aggregate counts and issue counts, not source email addresses or row contents.
+- Synthetic tests cover a valid snapshot, orphan foreign keys, ambiguous exam sessions, duplicate IDs and malformed JSON.
+- CI run [45352448601](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45352448601) passed on commit `954dcfa44f81be5ac2c183a58d6b89e887aa4377`, including PostgreSQL migrations and all portal API/storage/export-audit tests.
+- Usage after a separately approved source export is available: `python manage.py audit_hatchable_export --input /secure/path/hatchable-export.json`. The command is intentionally audit-only; it does not import records.
