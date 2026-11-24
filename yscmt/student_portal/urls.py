@@ -14,7 +14,7 @@ from .views import (
     PortalTeacherRepliesAPIView, PortalPracticeSubmissionAPIView,
     PortalAdminEnrollmentAPIView, PortalAdminPracticeReviewAPIView, PortalAdminAuditLogAPIView,
     PortalAdminOverviewAPIView, PortalAdminStudentListAPIView,
-    PortalAdminCourseInstructorAPIView, PortalInstructorCoursesAPIView, PortalInstructorStudentListAPIView,
+    PortalAdminCourseInstructorAPIView, PortalInstructorCoursesAPIView, PortalInstructorStudentListAPIView,\n    PortalInstructorClassroomSessionAPIView, PortalInstructorAnnouncementAPIView, PortalInstructorTeacherReplyAPIView,
 )
 
 urlpatterns = [
@@ -46,6 +46,9 @@ urlpatterns = [
     path("admin/course-instructors/<uuid:assignment_id>/", PortalAdminCourseInstructorAPIView.as_view(), name="portal-admin-course-instructor-delete"),
     path("instructor/courses/", PortalInstructorCoursesAPIView.as_view(), name="portal-instructor-courses"),
     path("instructor/courses/<uuid:course_id>/students/", PortalInstructorStudentListAPIView.as_view(), name="portal-instructor-students"),
+    path("instructor/courses/<uuid:course_id>/classroom/sessions/", PortalInstructorClassroomSessionAPIView.as_view(), name="portal-instructor-classroom-sessions"),
+    path("instructor/courses/<uuid:course_id>/classroom/announcements/", PortalInstructorAnnouncementAPIView.as_view(), name="portal-instructor-announcements"),
+    path("instructor/courses/<uuid:course_id>/classroom/teacher-replies/", PortalInstructorTeacherReplyAPIView.as_view(), name="portal-instructor-teacher-replies"),
     path("admin/overview/", PortalAdminOverviewAPIView.as_view(), name="portal-admin-overview"),
     path("admin/students/", PortalAdminStudentListAPIView.as_view(), name="portal-admin-students"),
     path("admin/enrollments/", PortalAdminEnrollmentAPIView.as_view(), name="portal-admin-enrollments"),
