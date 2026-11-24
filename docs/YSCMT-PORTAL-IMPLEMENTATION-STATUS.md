@@ -126,3 +126,13 @@ Keep Hatchable active as the production service and fallback. Do not perform pro
 - Dedicated preview CI [45488765068](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45488765068) completed successfully on that exact commit. PostgreSQL-only preview guard, Django checks, migration consistency, migrations on disposable PostgreSQL, and all Student Portal API/storage/export-audit tests passed.
 - The legacy workflow `.github/workflows/portal-api-tests.yml` still reports a separate failure with zero jobs returned; the dedicated preview workflow is the required gate and passed.
 - No production actions have been taken. Hatchable is still active, Neon application schema/data are still empty, and Render preview has not been created.
+
+
+## Follow-up implementation verification — 2026-11-24
+
+- Dedicated PostgreSQL preview CI run [45489054363](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45489054363) passed on branch commit `1c26de72157e768e756073a1b7dca7ca9baa0095`. Its `django-postgres` job completed successfully.
+- Instructor classroom management is implemented and covered by API tests: assigned instructors can create scheduled HTTPS classroom sessions, publish course announcements and post teacher replies; tests also reject unassigned-course access and insecure meeting links.
+- Password reset is implemented with hashed single-use tokens, 30-minute expiry, old-token invalidation, 60-second resend cooldown and generic public responses. Added `docs/PASSWORD-RESET-EMAIL-SETUP.md` to guide SMTP setup and synthetic end-to-end verification in preview.
+- SMTP credentials have not been configured and no reset email was sent. Private object storage remains unconfigured; no receipt bucket was created.
+- The current branch head is now `139775de1dc6d5010aee189bceaa3af35f538030` after adding the SMTP setup guide; CI for this documentation-only commit is pending.
+- Hatchable remains live. Neon has no application tables or imported records. Render preview has not been created. No production DNS, Vercel, or Hatchable settings were changed.
