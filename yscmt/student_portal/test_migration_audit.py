@@ -82,6 +82,24 @@ class HatchableExportAuditTests(SimpleTestCase):
         self.assertFalse(report["ready_for_import"])
         self.assertEqual(report["duplicates"]["courses"], 1)
 
+    def test_duplicate_email_case_insensitive_is_rejected(self):
+        payload = source_fixture()
+        payload["users"].append({
+            "id": "hatchable-user-2",
+            "email": "STUDENT@example.test",
+            "name": "Duplicate Email",
+        })
+        report = self.run_audit(payload)
+        self.assertFalse(report["ready_for_import"])
+        self.assertEqual(report["duplicates"]["users"], 1)
+
+    def test_duplicate_student_course_enrollment_is_rejected(self):
+        payload = source_fixture()
+        payload["enrollments"].append(dict(payload["enrollments"][0], id=str(uuid.uuid4())))
+        report = self.run_audit(payload)
+        self.assertFalse(report["ready_for_import"])
+        self.assertEqual(report["duplicates"]["enrollments"], 1)
+
     def test_invalid_json_export_is_rejected(self):
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", suffix=".json", delete=False) as handle:
             handle.write("{not-json")
