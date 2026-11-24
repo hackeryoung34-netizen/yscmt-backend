@@ -142,3 +142,26 @@ class PortalReceiptStorageTests(SimpleTestCase):
         self.assertEqual(kwargs["ExpiresIn"], 120)
         self.assertEqual(kwargs["Params"]["ResponseCacheControl"], "private, no-store")
         self.assertEqual(kwargs["Params"]["ResponseContentDisposition"], 'attachment; filename="bank%20receipt.pdf"')
+
+    @patch("student_portal.storage.boto3.client")
+    def test_legacy_r2_environment_names_remain_supported(self, client_factory):
+        client_factory.return_value = Mock()
+        with patch.dict(os.environ, {
+            "PORTAL_R2_ENDPOINT_URL": "https://account-id.r2.cloudflarestorage.com",
+            "PORTAL_R2_ACCESS_KEY_ID": "legacy-access",
+            "PORTAL_R2_SECRET_ACCESS_KEY": "legacy-secret",
+            "PORTAL_R2_BUCKET": "legacy-private-bucket",
+        }, clear=True):
+            from student_portal.storage import _client
+            _client()
+        kwargs = client_factory.call_args.kwargs
+        self.assertEqual(kwargs["region_name"], "auto")
+        self.assertEqual(kwargs["endpoint_url"], "https://account-id.r2.cloudflarestorage.com")
+
+    @patch("student_portal.storage.boto3.client")
+    def test_generic_s3_region_is_used(self, client_factory):
+        client_factory.return_value = Mock()
+        with patch.dict(os.environ, {**R2_ENV, "PORTAL_STORAGE_REGION": "eu-central-1"}, clear=True):
+            from student_portal.storage import _client
+            _client()
+        self.assertEqual(client_factory.call_args.kwargs["region_name"], "eu-central-1")
