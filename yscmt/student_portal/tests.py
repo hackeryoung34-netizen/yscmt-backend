@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
-from .models import PortalIdentity, PortalCourse, PortalCourseInstructor, PortalLesson, PortalEnrollment, PortalExam, PortalExamQuestion, PortalExamSession, PortalExamAttempt, PortalPayment, PortalCertificate, PortalPracticeSubmission, PortalClassroomSession, PortalClassroomAttendance, PortalClassroomMessage, PortalClassroomAnnouncement, PortalTeacherReply
+from .models import PortalIdentity, PortalCourse, PortalCourseInstructor, PortalLesson, PortalEnrollment, PortalExam, PortalExamQuestion, PortalExamSession, PortalExamAttempt, PortalPayment, PortalPaymentSubmission, PortalCertificate, PortalPracticeSubmission, PortalClassroomSession, PortalClassroomAttendance, PortalClassroomMessage, PortalClassroomAnnouncement, PortalTeacherReply
 
 class StudentPortalAPITests(TestCase):
     def setUp(self):
@@ -648,3 +648,63 @@ class StudentPortalAPITests(TestCase):
             payload, format="json",
         )
         self.assertEqual(invalid.status_code, 400)
+
+
+    def test_admin_can_review_valid_bank_payment_submission_and_approve_enrollment(self):
+        self.course.fee_amount = Decimal("15000.00")
+        self.course.fee_currency = "NGN"
+        self.course.save()
+        enrollment = PortalEnrollment.objects.create(student=self.student, course=self.course, status=PortalEnrollment.PENDING)
+        submission = PortalPaymentSubmission.objects.create(
+            enrollment=enrollment, student=self.student, course=self.course,
+            amount=Decimal("15000.00"), currency="NGN",
+            transfer_reference="BANK-REF-001",
+            storage_key=f"{self.student.pk}/receipts/receipt-001.pdf",
+            content_type="application/pdf", file_name="receipt.pdf",
+        )
+        admin = PortalIdentity(username="bankreviewadmin", email="bankreviewadmin@example.test", role=PortalIdentity.ROLE_ADMIN)
+        admin.set_password("StrongPass!2026")
+        admin.save()
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('bankreviewadmin')}")
+        queue = self.client.get("/api/portal/v1/admin/payment-submissions/")
+        self.assertEqual(queue.status_code, 200)
+        self.assertEqual(queue.data["results"][0]["id"], str(submission.pk))
+        response = self.client.post(
+            f"/api/portal/v1/admin/payment-submissions/{submission.pk}/review/",
+            {"status": "approved", "admin_note": "Verified against bank statement."}, format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        enrollment.refresh_from_db()
+        submission.refresh_from_db()
+        self.assertEqual(enrollment.status, PortalEnrollment.APPROVED)
+        self.assertEqual(submission.reviewed_by, admin)
+        self.assertEqual(submission.status, PortalPaymentSubmission.APPROVED)
+
+    def test_bank_payment_review_rejects_wrong_amount_and_student_cannot_review(self):
+        self.course.fee_amount = Decimal("15000.00")
+        self.course.fee_currency = "NGN"
+        self.course.save()
+        enrollment = PortalEnrollment.objects.create(student=self.student, course=self.course, status=PortalEnrollment.PENDING)
+        submission = PortalPaymentSubmission.objects.create(
+            enrollment=enrollment, student=self.student, course=self.course,
+            amount=Decimal("10000.00"), currency="NGN",
+            storage_key=f"{self.student.pk}/receipts/wrong.pdf",
+            content_type="application/pdf",
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('student1')}")
+        denied = self.client.post(
+            f"/api/portal/v1/admin/payment-submissions/{submission.pk}/review/",
+            {"status": "approved"}, format="json",
+        )
+        self.assertEqual(denied.status_code, 403)
+        admin = PortalIdentity(username="bankreviewadmin2", email="bankreviewadmin2@example.test", role=PortalIdentity.ROLE_ADMIN)
+        admin.set_password("StrongPass!2026")
+        admin.save()
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('bankreviewadmin2')}")
+        mismatch = self.client.post(
+            f"/api/portal/v1/admin/payment-submissions/{submission.pk}/review/",
+            {"status": "approved"}, format="json",
+        )
+        self.assertEqual(mismatch.status_code, 400)
+        enrollment.refresh_from_db()
+        self.assertEqual(enrollment.status, PortalEnrollment.PENDING)
