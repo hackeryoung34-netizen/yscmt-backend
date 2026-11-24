@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
-from .models import PortalIdentity, PortalCourse, PortalLesson, PortalEnrollment, PortalExam, PortalExamQuestion, PortalExamSession, PortalExamAttempt, PortalPayment, PortalCertificate, PortalPracticeSubmission, PortalClassroomSession, PortalClassroomAttendance, PortalClassroomMessage, PortalClassroomAnnouncement, PortalTeacherReply
+from .models import PortalIdentity, PortalCourse, PortalCourseInstructor, PortalLesson, PortalEnrollment, PortalExam, PortalExamQuestion, PortalExamSession, PortalExamAttempt, PortalPayment, PortalCertificate, PortalPracticeSubmission, PortalClassroomSession, PortalClassroomAttendance, PortalClassroomMessage, PortalClassroomAnnouncement, PortalTeacherReply
 
 class StudentPortalAPITests(TestCase):
     def setUp(self):
@@ -548,3 +548,32 @@ class StudentPortalAPITests(TestCase):
         self.assertEqual(len(students.data["results"]), 2)
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('student1')}")
         self.assertEqual(self.client.get("/api/portal/v1/admin/overview/").status_code, 403)
+
+
+    def test_admin_assigns_instructor_and_instructor_sees_only_assigned_courses(self):
+        instructor = PortalIdentity(username="teacher1", email="teacher1@example.test", role=PortalIdentity.ROLE_INSTRUCTOR)
+        instructor.set_password("StrongPass!2026")
+        instructor.save()
+        admin = PortalIdentity(username="assignadmin", email="assignadmin@example.test", role=PortalIdentity.ROLE_ADMIN)
+        admin.set_password("StrongPass!2026")
+        admin.save()
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('assignadmin')}")
+        assigned = self.client.post(
+            "/api/portal/v1/admin/course-instructors/",
+            {"course_id": str(self.course.pk), "instructor_id": str(instructor.pk)},
+            format="json",
+        )
+        self.assertEqual(assigned.status_code, 201)
+        self.assertTrue(PortalCourseInstructor.objects.filter(course=self.course, instructor=instructor).exists())
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('teacher1')}")
+        courses = self.client.get("/api/portal/v1/instructor/courses/")
+        self.assertEqual(courses.status_code, 200)
+        self.assertEqual([x["id"] for x in courses.data["results"]], [str(self.course.pk)])
+        students = self.client.get(f"/api/portal/v1/instructor/courses/{self.course.pk}/students/")
+        self.assertEqual(students.status_code, 200)
+        self.assertEqual(students.data["results"], [])
+
+    def test_student_cannot_access_instructor_or_assignment_endpoints(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('student1')}")
+        self.assertEqual(self.client.get("/api/portal/v1/instructor/courses/").status_code, 403)
+        self.assertEqual(self.client.get("/api/portal/v1/admin/course-instructors/").status_code, 403)
