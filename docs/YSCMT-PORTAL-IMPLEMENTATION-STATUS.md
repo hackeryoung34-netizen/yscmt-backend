@@ -6,54 +6,51 @@ Branch: `migration/neon-django-preview`
 
 A Django-native portal foundation exists under `yscmt/student_portal/`:
 
-- Separate UUID-based portal identity model, independent of legacy Django `auth.User`.
-- Django password hashing and verification.
-- Student-only public registration; clients cannot select instructor/admin roles.
-- Portal JWT access and refresh tokens; authentication resolves identity and trusted role from PostgreSQL on every request.
-- ORM-backed active course catalogue and course detail.
-- Student enrolment derives the student from the authenticated identity and creates a pending record; database constraint prevents duplicate student/course enrolments.
-- Lesson content is withheld until enrolment is approved or completed.
-- Idempotent lesson completion and course progress counts/percentage.
-- Exam catalogue is restricted to approved/completed course enrolments.
-- Timed exam sessions can resume while active; only one active session per student/exam is allowed.
-- Question delivery deliberately omits the correct answer field.
-- Exam submissions are checked and scored on the server; one persisted attempt per session; repeat submission returns the same result.
-- Expired sessions are closed and recorded as failed attempts rather than silently discarded.
-- Paystack payment intents are created from the stored course fee; the client cannot set amount or currency.
-- Payment initialization and verification run server-side only; secret-key test/live mode is checked before use.
-- Enrolment is approved only after Paystack reports success with matching reference, amount, currency and gateway domain; mismatches leave the enrolment pending.
-- Repeated verification is idempotent, and payment initialization fails closed when gateway secrets are absent.
-- Certificate requests require an approved/completed enrolment, completion of every active lesson, and at least one passed course exam.
-- Certificate issuance is idempotent per student/course; students can list their certificates and the public can verify a certificate code.
+- UUID-based portal identity, independent of legacy Django `auth.User`, with Django password hashing.
+- Public registration always creates a student; clients cannot self-assign instructor/admin roles.
+- Portal JWT access/refresh; each request resolves identity and trusted role from the database.
+- Active course catalogue, course details, enrolment, lesson access gating and progress tracking.
+- Duplicate enrolments and duplicate lesson progress are prevented by database constraints.
+- Timed exams, resumable sessions, student-scoped question delivery, server-side scoring, timeouts recorded as failed attempts, and one attempt per session.
+- Correct answer keys are never included in student question responses.
+- Paystack payment initialization uses the stored course fee, never a client-supplied amount. Server-side verification checks success, reference, amount, currency and expected test/live gateway domain before approving enrolment.
+- Certificate issuance requires approved/completed enrolment, completion of all active lessons and a passed exam; issuance is idempotent and certificates are verifiable.
+- Classroom sessions, attendance, messages, announcements, teacher replies and practice submissions have student-side APIs with enrolment/ownership checks.
+- Admin-only enrolment review (approve/reject) and practice review APIs have been added.
+- Admin review actions create audit events; audit-log listing is admin-only.
+- Public registration cannot grant admin privileges; admin APIs check the database-backed role.
 
-## Exam API routes now added
+## Current admin routes
 
-- `GET /api/portal/v1/courses/{course_id}/exams/`
-- `POST /api/portal/v1/exams/{exam_id}/start/`
-- `GET /api/portal/v1/exam-sessions/{session_id}/questions/`
-- `POST /api/portal/v1/exam-sessions/{session_id}/submit/`
-- `POST /api/portal/v1/enrollments/{enrollment_id}/payments/initialize/`
-- `POST /api/portal/v1/payments/{reference}/verify/`
-- `POST /api/portal/v1/courses/{course_id}/certificates/request/`
-- `GET /api/portal/v1/certificates/`
-- `GET /api/portal/v1/certificates/verify/{certificate_code}/`
+- `GET /api/portal/v1/admin/enrollments/?status=pending`
+- `POST /api/portal/v1/admin/enrollments/{enrollment_id}/review/`
+- `POST /api/portal/v1/admin/practice/submissions/{submission_id}/review/`
+- `GET /api/portal/v1/admin/audit-logs/`
 
 ## CI verification
 
-- Student Portal preview CI passed on commit `283fc9811bb303c944ffa7321e86119bae22be11`, run [45343460210](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45343460210). It verified Django checks, migration drift, all migrations against disposable PostgreSQL 16, and the Student Portal API tests including exam timeout, Paystack initialization/verification, and certificate eligibility/verification.
-- A separate legacy workflow reports failure with no jobs returned by the GitHub jobs endpoint. This is distinct from the dedicated preview workflow and remains a separate investigation item.
+- Previous dedicated Student Portal preview workflow passed on commit `f8d878792ce5a6740c55fe34fc43e450ec912587`, run [45343850546](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45343850546).
+- The new admin review/audit-log implementation adds migration `0006_portal_audit_log` and tests for role protection and audit creation.
+- CI for the latest changes is running: [45344202996](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45344202996). Do not treat the new admin changes as verified until it passes.
+- A separate legacy workflow `portal-api-tests.yml` continues to report failure with no jobs returned by the GitHub jobs endpoint. It is separate from the dedicated preview workflow and still needs diagnosis.
 
-## Remaining feature parity
+## Remaining work before preview deployment
 
-Classroom/practice submissions, attendance, announcements, teacher replies, audit logs, admin workflows, storage migration, Paystack webhook reconciliation, and source-record mapping remain to be implemented and tested.
+- Verify the latest admin migration and tests in CI.
+- Review the full model/schema mapping against Supabase source migrations and Hatchable source records.
+- Add and test remaining administrative workflows, instructor permissions, and webhook reconciliation.
+- Add a safe, repeatable synthetic-data migration rehearsal and reconciliation report.
+- Add a deployment guard requiring a PostgreSQL `DATABASE_URL` for non-debug preview; do not allow the ephemeral SQLite fallback for student records.
+- Review upload/storage migration and certificate asset handling.
+- Only after these gates pass, consider a Free Render preview using the selected workspace and Neon development branch.
 
 ## Not yet done
 
-- No migration has been run against the Neon database.
-- No real student records, payment data, password hashes, receipts, or certificates have been copied.
+- No migration has been run against Neon.
+- No real student records, password hashes, payment data, receipts or certificates have been copied.
 - No Render service has been created.
-- No production frontend, Vercel settings, DNS, or Hatchable settings have been changed.
+- No production frontend, Vercel settings, DNS or Hatchable settings have been changed.
 
 ## Deployment gate and safety
 
-Do not create the Render preview until the planned feature scope and tests are ready and migration files have been reviewed. Any preview must be Free, use the already-selected My Workspace, point to this branch, and use the Neon development connection only through Render secret environment configuration. Keep Hatchable active. Do not perform production cutover or disable Hatchable.
+Keep Hatchable active as the production service and fallback. Do not perform production cutover, disable Hatchable, change production DNS/Vercel configuration, or import real student data without explicit approval and a verified backup/mapping. Use synthetic data for preview tests. Do not introduce paid services or upgrades without explicit approval.
