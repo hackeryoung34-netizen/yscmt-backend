@@ -340,7 +340,8 @@ class PortalPaymentSubmission(models.Model):
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
-    STATUS_CHOICES = [(PENDING, "Pending"), (APPROVED, "Approved"), (REJECTED, "Rejected")]
+    UPLOADING = "uploading"
+    STATUS_CHOICES = [(UPLOADING, "Uploading"), (PENDING, "Pending"), (APPROVED, "Approved"), (REJECTED, "Rejected")]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     enrollment = models.ForeignKey(PortalEnrollment, related_name="bank_payment_submissions", on_delete=models.PROTECT)
@@ -356,6 +357,7 @@ class PortalPaymentSubmission(models.Model):
     admin_note = models.CharField(max_length=2000, blank=True)
     submitted_at = models.DateTimeField(auto_now_add=True)
     reviewed_at = models.DateTimeField(null=True, blank=True)
+    upload_expires_at = models.DateTimeField(null=True, blank=True)
     reviewed_by = models.ForeignKey(PortalIdentity, related_name="bank_payment_reviews", null=True, blank=True, on_delete=models.PROTECT)
 
     class Meta:
