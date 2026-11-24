@@ -846,6 +846,115 @@ class PortalPracticeSubmissionAPIView(APIView):
         }, status=status.HTTP_201_CREATED)
 
 
+
+class PortalInstructorClassroomSessionAPIView(APIView):
+    authentication_classes = [PortalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, course_id):
+        if request.user.role != PortalIdentity.ROLE_INSTRUCTOR:
+            raise PermissionDenied("Instructor access only.")
+        course = PortalCourse.objects.filter(
+            pk=course_id, is_active=True,
+            instructor_assignments__instructor=request.user,
+        ).first()
+        if not course:
+            raise PermissionDenied("This active course is not assigned to your instructor account.")
+        title = request.data.get("title")
+        description = request.data.get("description", "")
+        meeting_url = request.data.get("meeting_url")
+        if not isinstance(title, str) or not title.strip() or len(title) > 220:
+            raise serializers.ValidationError({"title": "Title is required and must be at most 220 characters."})
+        if not isinstance(description, str) or len(description) > 5000:
+            raise serializers.ValidationError({"description": "Description must be text up to 5000 characters."})
+        if not isinstance(meeting_url, str) or not meeting_url.startswith("https://"):
+            raise serializers.ValidationError({"meeting_url": "Meeting links must use HTTPS."})
+        try:
+            starts_at = serializers.DateTimeField().run_validation(request.data.get("starts_at"))
+            ends_at = serializers.DateTimeField().run_validation(request.data.get("ends_at"))
+        except serializers.ValidationError:
+            raise serializers.ValidationError({"starts_at": "Provide valid starts_at and ends_at timestamps."})
+        if ends_at <= starts_at:
+            raise serializers.ValidationError({"ends_at": "The session must end after it starts."})
+        item = PortalClassroomSession.objects.create(
+            course=course, title=title.strip(), description=description.strip(),
+            meeting_url=meeting_url, starts_at=starts_at, ends_at=ends_at,
+            status="scheduled",
+        )
+        PortalAuditLog.objects.create(
+            actor=request.user, action="classroom.session_created",
+            target_type="classroom_session", target_id=str(item.pk),
+            metadata={"course_id": str(course.pk)},
+        )
+        return Response({
+            "id": str(item.pk), "course_id": str(course.pk), "title": item.title,
+            "meeting_url": item.meeting_url, "starts_at": item.starts_at,
+            "ends_at": item.ends_at, "status": item.status,
+        }, status=status.HTTP_201_CREATED)
+
+
+class PortalInstructorAnnouncementAPIView(APIView):
+    authentication_classes = [PortalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, course_id):
+        if request.user.role != PortalIdentity.ROLE_INSTRUCTOR:
+            raise PermissionDenied("Instructor access only.")
+        course = PortalCourse.objects.filter(
+            pk=course_id, is_active=True,
+            instructor_assignments__instructor=request.user,
+        ).first()
+        if not course:
+            raise PermissionDenied("This active course is not assigned to your instructor account.")
+        title, body = request.data.get("title"), request.data.get("body")
+        if not isinstance(title, str) or not title.strip() or len(title) > 220:
+            raise serializers.ValidationError({"title": "Title is required and must be at most 220 characters."})
+        if not isinstance(body, str) or not body.strip() or len(body) > 10000:
+            raise serializers.ValidationError({"body": "Announcement text is required and must be at most 10000 characters."})
+        item = PortalClassroomAnnouncement.objects.create(
+            course=course, title=title.strip(), body=body.strip(), published=True,
+        )
+        PortalAuditLog.objects.create(
+            actor=request.user, action="classroom.announcement_published",
+            target_type="classroom_announcement", target_id=str(item.pk),
+            metadata={"course_id": str(course.pk)},
+        )
+        return Response({
+            "id": str(item.pk), "course_id": str(course.pk),
+            "title": item.title, "body": item.body, "published": item.published,
+        }, status=status.HTTP_201_CREATED)
+
+
+class PortalInstructorTeacherReplyAPIView(APIView):
+    authentication_classes = [PortalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, course_id):
+        if request.user.role != PortalIdentity.ROLE_INSTRUCTOR:
+            raise PermissionDenied("Instructor access only.")
+        course = PortalCourse.objects.filter(
+            pk=course_id, is_active=True,
+            instructor_assignments__instructor=request.user,
+        ).first()
+        if not course:
+            raise PermissionDenied("This active course is not assigned to your instructor account.")
+        message = request.data.get("message")
+        if not isinstance(message, str) or not message.strip() or len(message) > 2000:
+            raise serializers.ValidationError({"message": "Reply must contain 1 to 2000 characters."})
+        item = PortalTeacherReply.objects.create(
+            course=course, created_by=request.user, message=message.strip(),
+        )
+        PortalAuditLog.objects.create(
+            actor=request.user, action="classroom.teacher_reply_created",
+            target_type="teacher_reply", target_id=str(item.pk),
+            metadata={"course_id": str(course.pk)},
+        )
+        return Response({
+            "id": str(item.pk), "course_id": str(course.pk),
+            "message": item.message, "created_at": item.created_at,
+        }, status=status.HTTP_201_CREATED)
+
+
 class PortalAdminEnrollmentAPIView(APIView):
     authentication_classes = [PortalJWTAuthentication]
     permission_classes = [IsAuthenticated]
