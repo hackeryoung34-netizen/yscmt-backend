@@ -594,3 +594,57 @@ class StudentPortalAPITests(TestCase):
         self.assertEqual(response.status_code, 403)
         submission.refresh_from_db()
         self.assertEqual(submission.status, "submitted")
+
+
+    def test_assigned_instructor_can_create_classroom_session_announcement_and_reply(self):
+        instructor = PortalIdentity(username="classroomteacher", email="classroomteacher@example.test", role=PortalIdentity.ROLE_INSTRUCTOR)
+        instructor.set_password("StrongPass!2026")
+        instructor.save()
+        PortalCourseInstructor.objects.create(course=self.course, instructor=instructor, assigned_by=self.student)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('classroomteacher')}")
+        session = self.client.post(
+            f"/api/portal/v1/instructor/courses/{self.course.pk}/classroom/sessions/",
+            {
+                "title": "Live Python class", "description": "Week one",
+                "meeting_url": "https://meet.example.test/class",
+                "starts_at": (timezone.now() + timedelta(hours=1)).isoformat(),
+                "ends_at": (timezone.now() + timedelta(hours=2)).isoformat(),
+            }, format="json",
+        )
+        self.assertEqual(session.status_code, 201)
+        self.assertEqual(session.data["status"], "scheduled")
+        announcement = self.client.post(
+            f"/api/portal/v1/instructor/courses/{self.course.pk}/classroom/announcements/",
+            {"title": "Welcome", "body": "Class starts soon."}, format="json",
+        )
+        self.assertEqual(announcement.status_code, 201)
+        self.assertTrue(announcement.data["published"])
+        reply = self.client.post(
+            f"/api/portal/v1/instructor/courses/{self.course.pk}/classroom/teacher-replies/",
+            {"message": "Please review lesson one."}, format="json",
+        )
+        self.assertEqual(reply.status_code, 201)
+        self.assertEqual(PortalTeacherReply.objects.get(pk=reply.data["id"]).created_by, instructor)
+
+    def test_instructor_cannot_manage_unassigned_course_or_use_insecure_meeting_link(self):
+        instructor = PortalIdentity(username="unassignedteacher", email="unassignedteacher@example.test", role=PortalIdentity.ROLE_INSTRUCTOR)
+        instructor.set_password("StrongPass!2026")
+        instructor.save()
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('unassignedteacher')}")
+        payload = {
+            "title": "Class", "meeting_url": "https://meet.example.test",
+            "starts_at": (timezone.now() + timedelta(hours=1)).isoformat(),
+            "ends_at": (timezone.now() + timedelta(hours=2)).isoformat(),
+        }
+        denied = self.client.post(
+            f"/api/portal/v1/instructor/courses/{self.course.pk}/classroom/sessions/",
+            payload, format="json",
+        )
+        self.assertEqual(denied.status_code, 403)
+        PortalCourseInstructor.objects.create(course=self.course, instructor=instructor, assigned_by=self.student)
+        payload["meeting_url"] = "http://insecure.example.test"
+        invalid = self.client.post(
+            f"/api/portal/v1/instructor/courses/{self.course.pk}/classroom/sessions/",
+            payload, format="json",
+        )
+        self.assertEqual(invalid.status_code, 400)
