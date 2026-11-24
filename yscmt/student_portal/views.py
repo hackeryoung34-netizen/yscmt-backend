@@ -4,6 +4,7 @@ from decimal import Decimal, ROUND_HALF_UP
 import os
 import uuid
 import re
+from types import SimpleNamespace
 import hashlib
 import secrets
 from urllib.parse import urlencodequests
@@ -1519,6 +1520,39 @@ class PortalAdminClassroomAPIView(APIView):
         return Response({"session": {"id": str(item.pk), "status": item.status}})
 
 
+class PortalStudentEnrollmentListAPIView(APIView):
+    authentication_classes = [PortalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if request.user.role != PortalIdentity.ROLE_STUDENT:
+            raise PermissionDenied("Student access only.")
+        bank_status = PortalPaymentSubmission.objects.filter(
+            enrollment_id=models.OuterRef("pk"), student=request.user
+        ).order_by("-submitted_at").values("status")[:1]
+        paystack_status = PortalPayment.objects.filter(
+            enrollment_id=models.OuterRef("pk"), student=request.user
+        ).order_by("-created_at").values("status")[:1]
+        items = PortalEnrollment.objects.filter(student=request.user).select_related("course").annotate(
+            latest_bank_status=models.Subquery(bank_status),
+            latest_paystack_status=models.Subquery(paystack_status),
+        ).order_by("-created_at")[:200]
+        enrolments = []
+        for item in items:
+            payment_status = item.latest_bank_status or item.latest_paystack_status
+            if payment_status == PortalPaymentSubmission.APPROVED:
+                payment_status = "verified"
+            enrolments.append({
+                "id": str(item.pk), "course_id": str(item.course_id),
+                "status": item.status, "enrolled_at": item.created_at,
+                "title": item.course.title, "level": item.course.level,
+                "fee_amount": str(item.course.fee_amount),
+                "fee_currency": item.course.fee_currency,
+                "payment_status": payment_status,
+            })
+        return Response({"enrolments": enrolments, "results": enrolments})
+
+
 class PortalStudentPaymentAPIView(APIView):
     authentication_classes = [PortalJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -1549,7 +1583,7 @@ class PortalStudentPaymentAPIView(APIView):
             "payment": ({
                 "id": str(payment.pk), "amount": str(payment.amount),
                 "currency": payment.currency, "transfer_reference": payment.transfer_reference,
-                "status": payment.status, "admin_note": payment.admin_note,
+                "status": "verified" if payment.status == PortalPaymentSubmission.APPROVED else payment.status, "admin_note": payment.admin_note,
                 "submitted_at": payment.submitted_at, "reviewed_at": payment.reviewed_at,
             } if payment else None),
         })
@@ -1586,7 +1620,7 @@ class PortalAdminPaymentsAPIView(APIView):
                 "amount": str(item.amount), "currency": item.currency,
                 "transfer_reference": item.transfer_reference,
                 "storage_key": item.storage_key, "content_type": item.content_type,
-                "file_name": item.file_name, "status": item.status,
+                "file_name": item.file_name, "status": "verified" if item.status == PortalPaymentSubmission.APPROVED else item.status,
                 "admin_note": item.admin_note, "submitted_at": item.submitted_at,
                 "reviewed_at": item.reviewed_at,
                 "course_title": item.course.title,
@@ -1657,9 +1691,8 @@ class PortalAdminPaymentsAPIView(APIView):
             submission_id = request.data.get("payment_id")
             review_status = request.data.get("status")
             mapped_status = PortalPaymentSubmission.APPROVED if review_status == "verified" else review_status
-            forwarded = request._request
-            forwarded.data = {**request.data, "status": mapped_status, "admin_note": request.data.get("admin_note", "")}
-            return PortalAdminPaymentSubmissionAPIView().post(request, submission_id)
+            forwarded = SimpleNamespace(user=request.user, data={**dict(request.data), "status": mapped_status, "admin_note": request.data.get("admin_note", "")})
+            return PortalAdminPaymentSubmissionAPIView().post(forwarded, submission_id)
         raise serializers.ValidationError({"action": "Unknown payment action."})
 
 
