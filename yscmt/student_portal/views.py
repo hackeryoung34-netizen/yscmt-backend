@@ -1,4 +1,4 @@
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, transaction, models
 from datetime import timedelta
 from decimal import Decimal, ROUND_HALF_UP
 import os
@@ -12,7 +12,7 @@ from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .authentication import PortalJWTAuthentication
-from .models import (PortalIdentity, PortalCourse, PortalLesson, PortalEnrollment, PortalLessonProgress, PortalExam, PortalExamQuestion, PortalExamSession, PortalExamAttempt, PortalPayment, PortalCertificate)
+from .models import (PortalIdentity, PortalCourse, PortalLesson, PortalEnrollment, PortalLessonProgress, PortalExam, PortalExamQuestion, PortalExamSession, PortalExamAttempt, PortalPayment, PortalCertificate, PortalPracticeSubmission, PortalClassroomSession, PortalClassroomAttendance, PortalClassroomMessage, PortalClassroomAnnouncement, PortalTeacherReply)
 from .serializers import PortalRegisterSerializer, PortalTokenSerializer, PortalCourseSerializer, PortalLessonSerializer, PortalEnrollmentCreateSerializer, PortalExamSubmitSerializer
 
 class PortalRegisterAPIView(generics.CreateAPIView):
@@ -646,3 +646,201 @@ class PortalCertificateVerifyAPIView(APIView):
             "course_title": certificate.course_title,
             "issued_at": certificate.issued_at,
         })
+
+class PortalClassroomSessionListAPIView(APIView):
+    authentication_classes = [PortalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, course_id):
+        if request.user.role != PortalIdentity.ROLE_STUDENT:
+            raise PermissionDenied("Student access only.")
+        course = PortalCourse.objects.filter(pk=course_id, is_active=True).first()
+        if not course:
+            raise NotFound("Active course not found.")
+        allowed = PortalEnrollment.objects.filter(
+            student=request.user, course=course,
+            status__in=[PortalEnrollment.APPROVED, PortalEnrollment.COMPLETED],
+        ).exists()
+        if not allowed:
+            raise PermissionDenied("An approved enrolment is required to view classroom sessions.")
+        sessions = PortalClassroomSession.objects.filter(
+            course=course
+        ).exclude(status="cancelled").order_by("-starts_at")[:100]
+        return Response({"results": [{
+            "id": str(item.pk),
+            "title": item.title,
+            "description": item.description,
+            "meeting_url": item.meeting_url,
+            "starts_at": item.starts_at,
+            "ends_at": item.ends_at,
+            "status": item.status,
+            "joined_at": PortalClassroomAttendance.objects.filter(
+                session=item, student=request.user
+            ).values_list("joined_at", flat=True).first(),
+        } for item in sessions]})
+
+
+class PortalClassroomJoinAPIView(APIView):
+    authentication_classes = [PortalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, session_id):
+        if request.user.role != PortalIdentity.ROLE_STUDENT:
+            raise PermissionDenied("Student access only.")
+        session = PortalClassroomSession.objects.select_related("course").filter(pk=session_id).first()
+        if not session:
+            raise NotFound("Classroom session not found.")
+        allowed = PortalEnrollment.objects.filter(
+            student=request.user, course=session.course,
+            status__in=[PortalEnrollment.APPROVED, PortalEnrollment.COMPLETED],
+        ).exists()
+        now = timezone.now()
+        if (
+            not allowed
+            or session.status not in ["scheduled", "live"]
+            or now < session.starts_at - timedelta(minutes=15)
+            or now > session.ends_at
+        ):
+            raise PermissionDenied("This classroom session is not open to this student.")
+        attendance, _ = PortalClassroomAttendance.objects.get_or_create(
+            session=session, student=request.user
+        )
+        return Response({
+            "attendance_id": str(attendance.pk),
+            "joined_at": attendance.joined_at,
+        })
+
+
+class PortalClassroomMessageAPIView(APIView):
+    authentication_classes = [PortalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def _course(self, request, course_id):
+        if request.user.role != PortalIdentity.ROLE_STUDENT:
+            raise PermissionDenied("Student access only.")
+        course = PortalCourse.objects.filter(pk=course_id, is_active=True).first()
+        if not course:
+            raise NotFound("Active course not found.")
+        if not PortalEnrollment.objects.filter(
+            student=request.user, course=course,
+            status__in=[PortalEnrollment.APPROVED, PortalEnrollment.COMPLETED],
+        ).exists():
+            raise PermissionDenied("An approved enrolment is required for classroom messages.")
+        return course
+
+    def get(self, request, course_id):
+        course = self._course(request, course_id)
+        messages = list(PortalClassroomMessage.objects.filter(course=course).order_by("-created_at")[:100])
+        messages.reverse()
+        return Response({"results": [{
+            "id": str(item.pk),
+            "author_role": item.author_role,
+            "message": item.message,
+            "created_at": item.created_at,
+        } for item in messages]})
+
+    def post(self, request, course_id):
+        course = self._course(request, course_id)
+        serializer = PortalClassroomMessageSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        item = PortalClassroomMessage.objects.create(
+            course=course, student=request.user, author_role="student",
+            message=serializer.validated_data["message"].strip(),
+        )
+        return Response({
+            "id": str(item.pk), "message": item.message, "created_at": item.created_at,
+        }, status=status.HTTP_201_CREATED)
+
+
+class PortalClassroomAnnouncementsAPIView(APIView):
+    authentication_classes = [PortalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, course_id):
+        if request.user.role != PortalIdentity.ROLE_STUDENT:
+            raise PermissionDenied("Student access only.")
+        course = PortalCourse.objects.filter(pk=course_id, is_active=True).first()
+        if not course:
+            raise NotFound("Active course not found.")
+        enrolled = PortalEnrollment.objects.filter(
+            student=request.user, course=course,
+            status__in=[PortalEnrollment.APPROVED, PortalEnrollment.COMPLETED],
+        ).exists()
+        query = PortalClassroomAnnouncement.objects.filter(published=True).filter(
+            models.Q(course__isnull=True) | models.Q(course=course)
+        )
+        if not enrolled:
+            query = query.filter(course__isnull=True)
+        return Response({"results": [{
+            "id": str(item.pk),
+            "course_id": str(item.course_id) if item.course_id else None,
+            "title": item.title,
+            "body": item.body,
+            "created_at": item.created_at,
+        } for item in query[:100]]})
+
+
+class PortalTeacherRepliesAPIView(APIView):
+    authentication_classes = [PortalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, course_id):
+        if request.user.role != PortalIdentity.ROLE_STUDENT:
+            raise PermissionDenied("Student access only.")
+        course = PortalCourse.objects.filter(pk=course_id, is_active=True).first()
+        if not course:
+            raise NotFound("Active course not found.")
+        allowed = PortalEnrollment.objects.filter(
+            student=request.user, course=course,
+            status__in=[PortalEnrollment.APPROVED, PortalEnrollment.COMPLETED],
+        ).exists()
+        if not allowed:
+            raise PermissionDenied("An approved enrolment is required to view teacher replies.")
+        replies = PortalTeacherReply.objects.filter(course=course)[:100]
+        return Response({"results": [{
+            "id": str(item.pk), "message": item.message, "created_at": item.created_at,
+        } for item in replies]})
+
+
+class PortalPracticeSubmissionAPIView(APIView):
+    authentication_classes = [PortalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if request.user.role != PortalIdentity.ROLE_STUDENT:
+            raise PermissionDenied("Student access only.")
+        submissions = PortalPracticeSubmission.objects.filter(student=request.user)[:100]
+        return Response({"results": [{
+            "id": str(item.pk),
+            "lab_key": item.lab_key,
+            "title": item.title,
+            "submission_text": item.submission_text,
+            "project_url": item.project_url,
+            "status": item.status,
+            "reviewer_notes": item.reviewer_notes,
+            "submitted_at": item.submitted_at,
+            "reviewed_at": item.reviewed_at,
+        } for item in submissions]})
+
+    def post(self, request):
+        if request.user.role != PortalIdentity.ROLE_STUDENT:
+            raise PermissionDenied("Student access only.")
+        if not PortalEnrollment.objects.filter(
+            student=request.user,
+            status__in=[PortalEnrollment.APPROVED, PortalEnrollment.COMPLETED],
+        ).exists():
+            raise PermissionDenied("An approved course enrolment is required to submit practice work.")
+        serializer = PortalPracticeSubmitSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        item = PortalPracticeSubmission.objects.create(
+            student=request.user,
+            lab_key=serializer.validated_data["lab_key"].strip(),
+            title=serializer.validated_data["title"].strip(),
+            submission_text=serializer.validated_data.get("submission_text", ""),
+            project_url=serializer.validated_data.get("project_url", ""),
+        )
+        return Response({
+            "id": str(item.pk),
+            "status": item.status,
+            "submitted_at": item.submitted_at,
+        }, status=status.HTTP_201_CREATED)
