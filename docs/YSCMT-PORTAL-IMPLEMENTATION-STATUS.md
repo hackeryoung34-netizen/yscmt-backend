@@ -37,7 +37,8 @@ A Django-native portal foundation exists under `yscmt/student_portal/`:
 
 - Dedicated Student Portal CI passed on commit `13772dc320ecaa4982bd0c7a7fbd61ed62d17631`, run [45344616905](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45344616905). It verified Django checks, migration drift, all migrations against disposable PostgreSQL 16, and API tests including enrollment-completion and self-review safeguards.
 - The dashboard, practice queue and route additions are being verified by [45344715017](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45344715017).
-- The PostgreSQL-only preview guard and CI flag are being verified by [45344769918](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45344769918).
+- The PostgreSQL-only preview guard passed in [45344769918](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45344769918), including Django checks, migration drift, PostgreSQL 16 migrations and the full Student Portal API suite.
+- An additional CI gate now explicitly verifies that preview startup rejects both a missing `DATABASE_URL` and a SQLite URL; run [45344908675](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45344908675) is running for this stricter gate.
 - Earlier failures were traced to literal escaped line breaks in `urls.py` and an extra closing brace in migration `0006_portal_audit_log.py`; both have been corrected.
 - The separate legacy workflow `portal-api-tests.yml` reports failure with zero jobs returned for this migration branch. Its configured branch filters target the legacy independent branch, so it is not the authoritative check for this new preview branch. The dedicated preview workflow is the required gate.
 
