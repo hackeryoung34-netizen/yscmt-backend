@@ -58,6 +58,7 @@ urlpatterns = [
     path("admin/students/", PortalAdminStudentListAPIView.as_view(), name="portal-admin-students"),
     path("admin/enrollments/", PortalAdminEnrollmentAPIView.as_view(), name="portal-admin-enrollments"),
     path("admin/enrollments/<uuid:enrollment_id>/review/", PortalAdminEnrollmentAPIView.as_view(), name="portal-admin-enrollment-review"),
+    path("student/enrollments/", PortalStudentEnrollmentListAPIView.as_view(), name="portal-student-enrollments"),
     path("student/payment/", PortalStudentPaymentAPIView.as_view(), name="portal-student-payment"),
     path("admin/payments/", PortalAdminPaymentsAPIView.as_view(), name="portal-admin-payments"),
     path("student/payment-submissions/upload/", PortalBankReceiptUploadAPIView.as_view(), name="portal-bank-receipt-upload"),
