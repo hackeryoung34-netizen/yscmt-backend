@@ -212,3 +212,96 @@ class PortalCertificate(models.Model):
         constraints = [
             models.UniqueConstraint(fields=["student", "course"], name="uniq_portal_student_course_certificate"),
         ]
+
+class PortalPracticeSubmission(models.Model):
+    STATUS_CHOICES = [
+        ("submitted", "Submitted"),
+        ("reviewing", "Reviewing"),
+        ("approved", "Approved"),
+        ("rejected", "Rejected"),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    student = models.ForeignKey(PortalIdentity, related_name="practice_submissions", on_delete=models.PROTECT)
+    lab_key = models.CharField(max_length=100)
+    title = models.CharField(max_length=200)
+    submission_text = models.TextField(blank=True)
+    project_url = models.URLField(blank=True, max_length=2048)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="submitted")
+    reviewer_notes = models.TextField(blank=True)
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-submitted_at"]
+
+
+class PortalClassroomSession(models.Model):
+    STATUS_CHOICES = [
+        ("scheduled", "Scheduled"),
+        ("live", "Live"),
+        ("completed", "Completed"),
+        ("cancelled", "Cancelled"),
+    ]
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    course = models.ForeignKey(PortalCourse, related_name="classroom_sessions", on_delete=models.CASCADE)
+    title = models.CharField(max_length=220)
+    description = models.TextField(blank=True)
+    meeting_url = models.URLField(max_length=2048)
+    starts_at = models.DateTimeField()
+    ends_at = models.DateTimeField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="scheduled")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-starts_at"]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(ends_at__gt=models.F("starts_at")), name="portal_classroom_end_after_start"),
+        ]
+
+
+class PortalClassroomAttendance(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    session = models.ForeignKey(PortalClassroomSession, related_name="attendance", on_delete=models.CASCADE)
+    student = models.ForeignKey(PortalIdentity, related_name="classroom_attendance", on_delete=models.CASCADE)
+    joined_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["student", "session"], name="uniq_portal_student_classroom_attendance"),
+        ]
+
+
+class PortalClassroomMessage(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    course = models.ForeignKey(PortalCourse, related_name="classroom_messages", on_delete=models.CASCADE)
+    student = models.ForeignKey(PortalIdentity, related_name="classroom_messages", on_delete=models.CASCADE)
+    author_role = models.CharField(max_length=20, default="student")
+    message = models.CharField(max_length=2000)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+
+class PortalClassroomAnnouncement(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    course = models.ForeignKey(PortalCourse, related_name="announcements", null=True, blank=True, on_delete=models.CASCADE)
+    title = models.CharField(max_length=220)
+    body = models.TextField()
+    published = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class PortalTeacherReply(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    course = models.ForeignKey(PortalCourse, related_name="teacher_replies", on_delete=models.CASCADE)
+    created_by = models.ForeignKey(PortalIdentity, related_name="teacher_replies", on_delete=models.PROTECT)
+    message = models.CharField(max_length=2000)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
