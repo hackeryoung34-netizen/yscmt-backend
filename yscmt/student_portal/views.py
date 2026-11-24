@@ -4,16 +4,24 @@ from decimal import Decimal, ROUND_HALF_UP
 import os
 import uuid
 import requests
+import re
 from rest_framework import generics, serializers, status
-from rest_framework.exceptions import NotFound, PermissionDenied
+from rest_framework.exceptions import APIException, NotFound, PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .authentication import PortalJWTAuthentication
+from .storage import generate_receipt_upload_form, verify_uploaded_receipt, generate_receipt_download_url, ReceiptStorageError
 from .models import (PortalIdentity, PortalCourse, PortalCourseInstructor, PortalLesson, PortalEnrollment, PortalLessonProgress, PortalExam, PortalExamQuestion, PortalExamSession, PortalExamAttempt, PortalPayment, PortalPaymentSubmission, PortalCertificate, PortalPracticeSubmission, PortalClassroomSession, PortalClassroomAttendance, PortalClassroomMessage, PortalClassroomAnnouncement, PortalTeacherReply, PortalAuditLog)
 from .serializers import PortalRegisterSerializer, PortalTokenSerializer, PortalCourseSerializer, PortalLessonSerializer, PortalEnrollmentCreateSerializer, PortalExamSubmitSerializer, PortalPracticeSubmitSerializer, PortalClassroomMessageSerializer
+
+class PortalStorageUnavailable(APIException):
+    status_code = 503
+    default_detail = "Private receipt storage is not configured or is temporarily unavailable."
+    default_code = "private_storage_unavailable"
+
 
 class PortalRegisterAPIView(generics.CreateAPIView):
     serializer_class = PortalRegisterSerializer
@@ -1022,6 +1030,127 @@ class PortalAdminEnrollmentAPIView(APIView):
 
 
 
+class PortalBankReceiptUploadAPIView(APIView):
+    authentication_classes = [PortalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if request.user.role != PortalIdentity.ROLE_STUDENT:
+            raise PermissionDenied("Only students can upload bank payment receipts.")
+        enrollment_id = request.data.get("enrollment_id")
+        content_type = request.data.get("content_type")
+        file_name = request.data.get("file_name")
+        transfer_reference = request.data.get("transfer_reference", "")
+        if not isinstance(transfer_reference, str) or len(transfer_reference) > 120:
+            raise serializers.ValidationError({"transfer_reference": "Reference must be text up to 120 characters."})
+        if not isinstance(file_name, str) or not file_name.strip() or len(file_name) > 255:
+            raise serializers.ValidationError({"file_name": "A filename up to 255 characters is required."})
+        safe_name = file_name.replace("\\", "/").split("/")[-1].strip()
+        safe_name = re.sub(r"[^A-Za-z0-9._ -]", "_", safe_name)[:180]
+        extension = safe_name.lower().rsplit(".", 1)[-1] if "." in safe_name else ""
+        allowed = {"pdf": "application/pdf", "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png"}
+        if extension not in allowed or content_type != allowed[extension]:
+            raise serializers.ValidationError({"content_type": "Only matching PDF, JPG, JPEG or PNG receipts are accepted."})
+        enrollment = PortalEnrollment.objects.select_related("course").filter(
+            pk=enrollment_id, student=request.user, status=PortalEnrollment.PENDING,
+            course__is_active=True,
+        ).first()
+        if not enrollment:
+            raise NotFound("Pending enrolment not found.")
+        if enrollment.course.fee_amount <= 0:
+            raise serializers.ValidationError({"enrollment_id": "This course does not require a bank payment."})
+        if PortalPaymentSubmission.objects.filter(
+            enrollment=enrollment,
+            status__in=[PortalPaymentSubmission.UPLOADING, PortalPaymentSubmission.PENDING],
+        ).exists():
+            raise serializers.ValidationError({"enrollment_id": "A bank receipt is already being uploaded or awaiting review."})
+        storage_key = f"{request.user.pk}/receipts/{uuid.uuid4().hex}.{extension}"
+        expires_at = timezone.now() + timedelta(minutes=5)
+        try:
+            upload = generate_receipt_upload_form(
+                storage_key=storage_key, owner_id=str(request.user.pk),
+                content_type=content_type, max_bytes=10 * 1024 * 1024,
+                expires_seconds=300,
+            )
+        except ReceiptStorageError:
+            raise PortalStorageUnavailable()
+        submission = PortalPaymentSubmission.objects.create(
+            enrollment=enrollment, student=request.user, course=enrollment.course,
+            amount=enrollment.course.fee_amount, currency=enrollment.course.fee_currency,
+            transfer_reference=transfer_reference.strip(), storage_key=storage_key,
+            content_type=content_type, file_name=safe_name,
+            status=PortalPaymentSubmission.UPLOADING, upload_expires_at=expires_at,
+        )
+        return Response({
+            "submission_id": str(submission.pk),
+            "upload_method": "POST",
+            "upload_url": upload["url"],
+            "upload_fields": upload["fields"],
+            "storage_key": storage_key,
+            "expires_in": 300,
+            "max_bytes": 10 * 1024 * 1024,
+            "required_content_type": content_type,
+        }, status=status.HTTP_201_CREATED)
+
+
+class PortalBankReceiptFinalizeAPIView(APIView):
+    authentication_classes = [PortalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, submission_id):
+        if request.user.role != PortalIdentity.ROLE_STUDENT:
+            raise PermissionDenied("Only students can finalize their receipt upload.")
+        with transaction.atomic():
+            item = PortalPaymentSubmission.objects.select_for_update().select_related(
+                "enrollment", "course"
+            ).filter(pk=submission_id, student=request.user).first()
+            if not item:
+                raise NotFound("Receipt upload not found.")
+            if item.status != PortalPaymentSubmission.UPLOADING:
+                raise serializers.ValidationError({"status": "This receipt upload is not awaiting completion."})
+            if not item.upload_expires_at or timezone.now() > item.upload_expires_at:
+                raise serializers.ValidationError({"status": "Upload authorization expired. Request a new upload URL."})
+            if item.enrollment.status != PortalEnrollment.PENDING or item.enrollment.course_id != item.course_id:
+                raise serializers.ValidationError({"enrollment": "The related pending enrolment is no longer valid."})
+            try:
+                verify_uploaded_receipt(
+                    storage_key=item.storage_key, owner_id=str(request.user.pk),
+                    expected_content_type=item.content_type, max_bytes=10 * 1024 * 1024,
+                )
+            except ReceiptStorageError:
+                raise PortalStorageUnavailable()
+            item.status = PortalPaymentSubmission.PENDING
+            item.upload_expires_at = None
+            item.save(update_fields=["status", "upload_expires_at"])
+            PortalAuditLog.objects.create(
+                actor=request.user, action="payment_submission.receipt_uploaded",
+                target_type="payment_submission", target_id=str(item.pk),
+                metadata={"course_id": str(item.course_id), "content_type": item.content_type},
+            )
+        return Response({"id": str(item.pk), "status": item.status}, status=status.HTTP_200_OK)
+
+
+class PortalBankReceiptAccessAPIView(APIView):
+    authentication_classes = [PortalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, submission_id):
+        item = PortalPaymentSubmission.objects.select_related("student").filter(pk=submission_id).first()
+        if not item:
+            raise NotFound("Receipt not found.")
+        if request.user.role != PortalIdentity.ROLE_ADMIN and item.student_id != request.user.pk:
+            raise PermissionDenied("You cannot access another student's receipt.")
+        if item.status not in [PortalPaymentSubmission.PENDING, PortalPaymentSubmission.APPROVED, PortalPaymentSubmission.REJECTED]:
+            raise NotFound("Receipt is not available.")
+        try:
+            url = generate_receipt_download_url(
+                storage_key=item.storage_key, file_name=item.file_name, expires_seconds=120,
+            )
+        except ReceiptStorageError:
+            raise PortalStorageUnavailable()
+        return Response({"download_url": url, "expires_in": 120})
+
+
 class PortalAdminPaymentSubmissionAPIView(APIView):
     authentication_classes = [PortalJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -1082,6 +1211,14 @@ class PortalAdminPaymentSubmissionAPIView(APIView):
                 raise serializers.ValidationError({"detail": "Receipt amount or currency does not match the stored course fee."})
             if not item.storage_key or not item.storage_key.startswith(f"{item.student_id}/"):
                 raise serializers.ValidationError({"detail": "Receipt storage ownership is invalid."})
+            if new_status == PortalPaymentSubmission.APPROVED:
+                try:
+                    verify_uploaded_receipt(
+                        storage_key=item.storage_key, owner_id=str(item.student_id),
+                        expected_content_type=item.content_type, max_bytes=10 * 1024 * 1024,
+                    )
+                except ReceiptStorageError:
+                    raise PortalStorageUnavailable()
             item.status = new_status
             item.admin_note = note.strip()
             item.reviewed_at = timezone.now()
