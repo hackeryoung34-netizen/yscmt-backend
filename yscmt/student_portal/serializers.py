@@ -78,3 +78,21 @@ class PortalLessonSerializer(serializers.ModelSerializer):
 
 class PortalEnrollmentCreateSerializer(serializers.Serializer):
     course_id = serializers.UUIDField()
+
+class PortalExamSubmitSerializer(serializers.Serializer):
+    answers = serializers.DictField(
+        child=serializers.IntegerField(min_value=0, max_value=3),
+        allow_empty=False,
+    )
+
+    def validate_answers(self, value):
+        import uuid
+        if len(value) > 100:
+            raise serializers.ValidationError("An exam cannot contain more than 100 answers.")
+        normalized = {}
+        for question_id, option_index in value.items():
+            try:
+                normalized[str(uuid.UUID(question_id))] = option_index
+            except (ValueError, TypeError, AttributeError):
+                raise serializers.ValidationError("Every answer key must be a valid question UUID.")
+        return normalized
