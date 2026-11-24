@@ -1282,7 +1282,7 @@ class PortalBankReceiptUploadAPIView(APIView):
         try:
             upload = generate_receipt_upload_form(
                 storage_key=storage_key, owner_id=str(request.user.pk),
-                content_type=content_type, max_bytes=10 * 1024 * 1024,
+                content_type=content_type, max_bytes=5 * 1024 * 1024,
                 expires_seconds=300,
             )
         except ReceiptStorageError:
@@ -1301,7 +1301,7 @@ class PortalBankReceiptUploadAPIView(APIView):
             "upload_fields": upload["fields"],
             "storage_key": storage_key,
             "expires_in": 300,
-            "max_bytes": 10 * 1024 * 1024,
+            "max_bytes": 5 * 1024 * 1024,
             "required_content_type": content_type,
         }, status=status.HTTP_201_CREATED)
 
@@ -1328,7 +1328,7 @@ class PortalBankReceiptFinalizeAPIView(APIView):
             try:
                 verify_uploaded_receipt(
                     storage_key=item.storage_key, owner_id=str(request.user.pk),
-                    expected_content_type=item.content_type, max_bytes=10 * 1024 * 1024,
+                    expected_content_type=item.content_type, max_bytes=5 * 1024 * 1024,
                 )
             except ReceiptStorageError:
                 raise PortalStorageUnavailable()
@@ -1519,6 +1519,150 @@ class PortalAdminClassroomAPIView(APIView):
         return Response({"session": {"id": str(item.pk), "status": item.status}})
 
 
+class PortalStudentPaymentAPIView(APIView):
+    authentication_classes = [PortalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if request.user.role != PortalIdentity.ROLE_STUDENT:
+            raise PermissionDenied("Student access only.")
+        enrollment_id = request.query_params.get("enrollment_id")
+        enrollment = PortalEnrollment.objects.select_related("course").filter(
+            pk=enrollment_id, student=request.user
+        ).first()
+        if not enrollment:
+            raise NotFound("Enrolment not found.")
+        setting = PortalSiteSetting.objects.filter(setting_key="bank_transfer").first()
+        payment = PortalPaymentSubmission.objects.filter(
+            enrollment=enrollment, student=request.user
+        ).order_by("-submitted_at").first()
+        return Response({
+            "enrolment": {
+                "enrolment_id": str(enrollment.pk),
+                "enrolment_status": enrollment.status,
+                "course_id": str(enrollment.course_id),
+                "title": enrollment.course.title,
+                "fee_amount": str(enrollment.course.fee_amount),
+                "fee_currency": enrollment.course.fee_currency,
+            },
+            "bank": setting.setting_value if setting else {},
+            "payment": ({
+                "id": str(payment.pk), "amount": str(payment.amount),
+                "currency": payment.currency, "transfer_reference": payment.transfer_reference,
+                "status": payment.status, "admin_note": payment.admin_note,
+                "submitted_at": payment.submitted_at, "reviewed_at": payment.reviewed_at,
+            } if payment else None),
+        })
+
+
+class PortalAdminPaymentsAPIView(APIView):
+    authentication_classes = [PortalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def _admin(self, request):
+        if request.user.role != PortalIdentity.ROLE_ADMIN:
+            raise PermissionDenied("Administrator access only.")
+
+    def get(self, request):
+        self._admin(request)
+        setting = PortalSiteSetting.objects.filter(setting_key="bank_transfer").first()
+        courses = PortalCourse.objects.order_by("title")
+        bank_payments = PortalPaymentSubmission.objects.select_related(
+            "student", "course", "enrollment"
+        ).order_by("-submitted_at")[:300]
+        paystack = PortalPayment.objects.select_related(
+            "student", "enrollment__course"
+        ).order_by("-created_at")[:300]
+        return Response({
+            "bank": setting.setting_value if setting else {},
+            "courses": [{
+                "id": str(item.pk), "title": item.title,
+                "fee_amount": str(item.fee_amount), "fee_currency": item.fee_currency,
+                "active": item.is_active,
+            } for item in courses],
+            "payments": [{
+                "id": str(item.pk), "enrolment_id": str(item.enrollment_id),
+                "user_id": str(item.student_id), "course_id": str(item.course_id),
+                "amount": str(item.amount), "currency": item.currency,
+                "transfer_reference": item.transfer_reference,
+                "storage_key": item.storage_key, "content_type": item.content_type,
+                "file_name": item.file_name, "status": item.status,
+                "admin_note": item.admin_note, "submitted_at": item.submitted_at,
+                "reviewed_at": item.reviewed_at,
+                "course_title": item.course.title,
+                "student_name": item.student.full_name or item.student.username,
+                "email": item.student.email,
+                "receipt_endpoint": f"/api/portal/v1/payment-submissions/{item.pk}/receipt/",
+            } for item in bank_payments],
+            "paystack_payments": [{
+                "id": str(item.pk), "enrolment_id": str(item.enrollment_id),
+                "user_id": str(item.student_id), "course_id": str(item.enrollment.course_id),
+                "reference": item.reference, "amount_kobo": item.amount_kobo,
+                "currency": item.currency, "status": item.status,
+                "created_at": item.created_at, "verified_at": item.verified_at,
+                "course_title": item.enrollment.course.title,
+                "student_name": item.student.full_name or item.student.username,
+                "email": item.student.email,
+            } for item in paystack],
+        })
+
+    def post(self, request):
+        self._admin(request)
+        action = request.data.get("action")
+        if action == "save_bank":
+            bank_name = request.data.get("bank_name")
+            account_name = request.data.get("account_name")
+            account_number = request.data.get("account_number")
+            instructions = request.data.get("instructions", "")
+            if not all(isinstance(x, str) for x in [bank_name, account_name, account_number, instructions]):
+                raise serializers.ValidationError({"detail": "Bank name, account name and account number are required."})
+            bank_name, account_name = bank_name.strip()[:100], account_name.strip()[:140]
+            account_number = "".join(ch for ch in account_number if ch.isdigit())[:40]
+            instructions = instructions.strip()[:1000]
+            if not bank_name or not account_name or not 8 <= len(account_number) <= 20:
+                raise serializers.ValidationError({"detail": "Provide valid bank name, account name and account number."})
+            value = {"bank_name": bank_name, "account_name": account_name, "account_number": account_number, "instructions": instructions}
+            PortalSiteSetting.objects.update_or_create(
+                setting_key="bank_transfer", defaults={"setting_value": value}
+            )
+            PortalAuditLog.objects.create(
+                actor=request.user, action="bank_transfer_details_updated",
+                target_type="site_settings", target_id="bank_transfer",
+                metadata={"bank_name": bank_name, "account_number_last4": account_number[-4:]},
+            )
+            return Response({"message": "Bank transfer details saved.", "bank": value})
+        if action == "set_fee":
+            course_id = request.data.get("course_id")
+            fee_amount = request.data.get("fee_amount")
+            currency = str(request.data.get("fee_currency", "NGN")).upper()
+            try:
+                amount = int(fee_amount)
+            except (TypeError, ValueError):
+                raise serializers.ValidationError({"fee_amount": "Enter a whole-number NGN course fee."})
+            if amount < 0 or amount > 100000000 or currency != "NGN":
+                raise serializers.ValidationError({"fee_amount": "Enter a valid whole-number NGN course fee."})
+            course = PortalCourse.objects.filter(pk=course_id).first()
+            if not course:
+                raise NotFound("Course not found.")
+            course.fee_amount = Decimal(amount)
+            course.fee_currency = currency
+            course.save(update_fields=["fee_amount", "fee_currency", "updated_at"])
+            PortalAuditLog.objects.create(
+                actor=request.user, action="course_fee_updated",
+                target_type="course", target_id=str(course.pk),
+                metadata={"fee_amount": amount, "fee_currency": currency},
+            )
+            return Response({"course": {"id": str(course.pk), "title": course.title, "fee_amount": str(course.fee_amount), "fee_currency": course.fee_currency}})
+        if action == "review":
+            submission_id = request.data.get("payment_id")
+            review_status = request.data.get("status")
+            mapped_status = PortalPaymentSubmission.APPROVED if review_status == "verified" else review_status
+            forwarded = request._request
+            forwarded.data = {**request.data, "status": mapped_status, "admin_note": request.data.get("admin_note", "")}
+            return PortalAdminPaymentSubmissionAPIView().post(request, submission_id)
+        raise serializers.ValidationError({"action": "Unknown payment action."})
+
+
 class PortalAdminPaystackPaymentAPIView(APIView):
     authentication_classes = [PortalJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -1611,7 +1755,7 @@ class PortalAdminPaymentSubmissionAPIView(APIView):
                 try:
                     verify_uploaded_receipt(
                         storage_key=item.storage_key, owner_id=str(item.student_id),
-                        expected_content_type=item.content_type, max_bytes=10 * 1024 * 1024,
+                        expected_content_type=item.content_type, max_bytes=5 * 1024 * 1024,
                     )
                 except ReceiptStorageError:
                     raise PortalStorageUnavailable()
