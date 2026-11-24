@@ -1,8 +1,10 @@
 from datetime import timedelta
+from decimal import Decimal
+from unittest.mock import Mock, patch
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
-from .models import PortalIdentity, PortalCourse, PortalLesson, PortalEnrollment, PortalExam, PortalExamQuestion, PortalExamSession, PortalExamAttempt
+from .models import PortalIdentity, PortalCourse, PortalLesson, PortalEnrollment, PortalExam, PortalExamQuestion, PortalExamSession, PortalExamAttempt, PortalPayment
 
 class StudentPortalAPITests(TestCase):
     def setUp(self):
@@ -199,3 +201,116 @@ class StudentPortalAPITests(TestCase):
         self.assertEqual(submitted.data["score"], 0)
         self.assertFalse(submitted.data["passed"])
         self.assertEqual(PortalExamAttempt.objects.filter(session=session).count(), 1)
+
+def test_payment_initialization_uses_stored_fee_not_client_amount(self):
+        self.course.fee_amount = Decimal("15000.00")
+        self.course.fee_currency = "NGN"
+        self.course.save()
+        enrollment = PortalEnrollment.objects.create(
+            student=self.student, course=self.course, status=PortalEnrollment.PENDING
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('student1')}")
+        gateway = Mock(status_code=200)
+        gateway.json.return_value = {
+            "status": True,
+            "data": {
+                "reference": "YSCMT_TEST_REFERENCE",
+                "authorization_url": "https://checkout.paystack.com/example",
+            },
+        }
+        with patch.dict("os.environ", {"PAYSTACK_SECRET_KEY": "sk_test_example", "PAYSTACK_EXPECTED_DOMAIN": "test"}):
+            with patch("student_portal.views.requests.post", return_value=gateway) as post:
+                response = self.client.post(
+                    f"/api/portal/v1/enrollments/{enrollment.pk}/payments/initialize/",
+                    {"amount": 1, "currency": "USD"}, format="json",
+                )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["amount_kobo"], 1500000)
+        self.assertEqual(response.data["currency"], "NGN")
+        self.assertEqual(post.call_args.kwargs["json"]["amount"], 1500000)
+        self.assertEqual(post.call_args.kwargs["json"]["currency"], "NGN")
+        self.assertEqual(PortalPayment.objects.get(enrollment=enrollment).status, PortalPayment.PENDING)
+
+    def test_payment_verification_approves_enrollment_only_after_gateway_success(self):
+        self.course.fee_amount = Decimal("15000.00")
+        self.course.fee_currency = "NGN"
+        self.course.save()
+        enrollment = PortalEnrollment.objects.create(
+            student=self.student, course=self.course, status=PortalEnrollment.PENDING
+        )
+        payment = PortalPayment.objects.create(
+            enrollment=enrollment, student=self.student,
+            reference="YSCMT_VERIFY_REFERENCE", amount_kobo=1500000, currency="NGN",
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('student1')}")
+        gateway = Mock(status_code=200)
+        gateway.json.return_value = {
+            "status": True,
+            "data": {
+                "status": "success",
+                "reference": payment.reference,
+                "amount": 1500000,
+                "currency": "NGN",
+                "domain": "test",
+                "paid_at": "2026-11-24T06:00:00.000Z",
+                "channel": "card",
+                "id": 123456,
+            },
+        }
+        with patch.dict("os.environ", {"PAYSTACK_SECRET_KEY": "sk_test_example", "PAYSTACK_EXPECTED_DOMAIN": "test"}):
+            with patch("student_portal.views.requests.get", return_value=gateway):
+                response = self.client.post(
+                    f"/api/portal/v1/payments/{payment.reference}/verify/", {}, format="json"
+                )
+        self.assertEqual(response.status_code, 200)
+        payment.refresh_from_db()
+        enrollment.refresh_from_db()
+        self.assertEqual(payment.status, PortalPayment.SUCCESS)
+        self.assertEqual(enrollment.status, PortalEnrollment.APPROVED)
+        self.assertIsNotNone(payment.verified_at)
+
+    def test_payment_verification_rejects_amount_mismatch(self):
+        self.course.fee_amount = Decimal("15000.00")
+        self.course.fee_currency = "NGN"
+        self.course.save()
+        enrollment = PortalEnrollment.objects.create(
+            student=self.student, course=self.course, status=PortalEnrollment.PENDING
+        )
+        payment = PortalPayment.objects.create(
+            enrollment=enrollment, student=self.student,
+            reference="YSCMT_BAD_AMOUNT", amount_kobo=1500000, currency="NGN",
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('student1')}")
+        gateway = Mock(status_code=200)
+        gateway.json.return_value = {
+            "status": True,
+            "data": {
+                "status": "success", "reference": payment.reference,
+                "amount": 1, "currency": "NGN", "domain": "test",
+            },
+        }
+        with patch.dict("os.environ", {"PAYSTACK_SECRET_KEY": "sk_test_example", "PAYSTACK_EXPECTED_DOMAIN": "test"}):
+            with patch("student_portal.views.requests.get", return_value=gateway):
+                response = self.client.post(
+                    f"/api/portal/v1/payments/{payment.reference}/verify/", {}, format="json"
+                )
+        self.assertEqual(response.status_code, 400)
+        payment.refresh_from_db()
+        enrollment.refresh_from_db()
+        self.assertEqual(payment.status, PortalPayment.PENDING)
+        self.assertEqual(enrollment.status, PortalEnrollment.PENDING)
+
+    def test_payment_initialization_fails_closed_without_gateway_secret(self):
+        self.course.fee_amount = Decimal("1000.00")
+        self.course.fee_currency = "NGN"
+        self.course.save()
+        enrollment = PortalEnrollment.objects.create(
+            student=self.student, course=self.course, status=PortalEnrollment.PENDING
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('student1')}")
+        with patch.dict("os.environ", {"PAYSTACK_SECRET_KEY": "", "PAYSTACK_EXPECTED_DOMAIN": ""}):
+            response = self.client.post(
+                f"/api/portal/v1/enrollments/{enrollment.pk}/payments/initialize/", {}, format="json"
+            )
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(PortalPayment.objects.count(), 0)
