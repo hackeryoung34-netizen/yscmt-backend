@@ -335,3 +335,30 @@ class PortalCourseInstructor(models.Model):
         ]
         ordering = ["course__title", "instructor__username"]
 
+
+class PortalPaymentSubmission(models.Model):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    STATUS_CHOICES = [(PENDING, "Pending"), (APPROVED, "Approved"), (REJECTED, "Rejected")]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    enrollment = models.ForeignKey(PortalEnrollment, related_name="bank_payment_submissions", on_delete=models.PROTECT)
+    student = models.ForeignKey(PortalIdentity, related_name="bank_payment_submissions", on_delete=models.PROTECT)
+    course = models.ForeignKey(PortalCourse, related_name="bank_payment_submissions", on_delete=models.PROTECT)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    currency = models.CharField(max_length=3, default="NGN")
+    transfer_reference = models.CharField(max_length=120, blank=True)
+    storage_key = models.CharField(max_length=512, unique=True)
+    content_type = models.CharField(max_length=100)
+    file_name = models.CharField(max_length=255, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=PENDING)
+    admin_note = models.CharField(max_length=2000, blank=True)
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(PortalIdentity, related_name="bank_payment_reviews", null=True, blank=True, on_delete=models.PROTECT)
+
+    class Meta:
+        ordering = ["-submitted_at"]
+        indexes = [models.Index(fields=["status", "submitted_at"], name="portal_bank_status_idx")]
+        constraints = [models.CheckConstraint(condition=models.Q(amount__gte=0), name="portal_bank_amount_nonnegative")]
