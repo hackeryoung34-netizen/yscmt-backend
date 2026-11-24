@@ -1185,6 +1185,7 @@ class PortalAdminOverviewAPIView(APIView):
             "enrollments_count": PortalEnrollment.objects.count(),
             "pending_enrollments_count": PortalEnrollment.objects.filter(status=PortalEnrollment.PENDING).count(),
             "pending_paystack_count": PortalPayment.objects.filter(status=PortalPayment.PENDING).count(),
+            "pending_bank_payment_count": PortalPaymentSubmission.objects.filter(status=PortalPaymentSubmission.PENDING).count(),
             "submitted_practice_count": PortalPracticeSubmission.objects.filter(status="submitted").count(),
             "certificates_count": PortalCertificate.objects.count(),
         })
