@@ -197,3 +197,18 @@ class PortalPayment(models.Model):
             ),
             models.CheckConstraint(condition=models.Q(amount_kobo__gt=0), name="portal_payment_amount_positive"),
         ]
+
+class PortalCertificate(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    certificate_code = models.CharField(max_length=40, unique=True)
+    student = models.ForeignKey(PortalIdentity, related_name="certificates", on_delete=models.PROTECT)
+    course = models.ForeignKey(PortalCourse, related_name="certificates", on_delete=models.PROTECT)
+    student_name = models.CharField(max_length=200)
+    course_title = models.CharField(max_length=220)
+    issued_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-issued_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["student", "course"], name="uniq_portal_student_course_certificate"),
+        ]
