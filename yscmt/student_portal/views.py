@@ -20,7 +20,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .authentication import PortalJWTAuthentication
 from .storage import generate_receipt_upload_form, verify_uploaded_receipt, generate_receipt_download_url, ReceiptStorageError
-from .models import (PortalIdentity, PortalPasswordResetToken, PortalCourse, PortalCourseInstructor, PortalLesson, PortalEnrollment, PortalLessonProgress, PortalExam, PortalExamQuestion, PortalExamSession, PortalExamAttempt, PortalPayment, PortalPaymentSubmission, PortalCertificate, PortalPracticeSubmission, PortalClassroomSession, PortalClassroomAttendance, PortalClassroomMessage, PortalClassroomAnnouncement, PortalTeacherReply, PortalAuditLog)
+from .models import (PortalIdentity, PortalPasswordResetToken, PortalCourse, PortalCourseInstructor, PortalLesson, PortalEnrollment, PortalLessonProgress, PortalExam, PortalExamQuestion, PortalExamSession, PortalExamAttempt, PortalPayment, PortalPaymentSubmission, PortalCertificate, PortalPracticeSubmission, PortalClassroomSession, PortalClassroomAttendance, PortalClassroomMessage, PortalClassroomAnnouncement, PortalTeacherReply, PortalSiteSetting, PortalAuditLog)
 from .serializers import PortalRegisterSerializer, PortalTokenSerializer, PortalCourseSerializer, PortalLessonSerializer, PortalEnrollmentCreateSerializer, PortalExamSubmitSerializer, PortalPracticeSubmitSerializer, PortalClassroomMessageSerializer
 
 class PortalStorageUnavailable(APIException):
@@ -772,6 +772,100 @@ class PortalCertificateVerifyAPIView(APIView):
             "course_title": certificate.course_title,
             "issued_at": certificate.issued_at,
         })
+
+class PortalStudentClassroomAPIView(APIView):
+    authentication_classes = [PortalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def _enrollments(self, request):
+        if request.user.role != PortalIdentity.ROLE_STUDENT:
+            raise PermissionDenied("Student access only.")
+        return list(PortalEnrollment.objects.filter(
+            student=request.user,
+            status__in=[PortalEnrollment.APPROVED, PortalEnrollment.COMPLETED],
+            course__is_active=True,
+        ).select_related("course"))
+
+    def get(self, request):
+        enrollments = self._enrollments(request)
+        course_ids = [item.course_id for item in enrollments]
+        sessions = PortalClassroomSession.objects.none()
+        announcements = PortalClassroomAnnouncement.objects.filter(published=True, course__isnull=True)
+        messages = []
+        if course_ids:
+            sessions = PortalClassroomSession.objects.filter(
+                course_id__in=course_ids,
+            ).exclude(status="cancelled").select_related("course").order_by("-starts_at")[:100]
+            announcements = PortalClassroomAnnouncement.objects.filter(
+                published=True,
+            ).filter(models.Q(course__isnull=True) | models.Q(course_id__in=course_ids)).order_by("-created_at")[:100]
+            student_messages = PortalClassroomMessage.objects.filter(
+                course_id__in=course_ids,
+            ).order_by("-created_at")[:100]
+            teacher_replies = PortalTeacherReply.objects.filter(
+                course_id__in=course_ids,
+            ).order_by("-created_at")[:100]
+            messages = [{
+                "id": str(item.pk), "course_id": str(item.course_id),
+                "author_role": item.author_role, "message": item.message,
+                "created_at": item.created_at,
+            } for item in student_messages]
+            messages += [{
+                "id": str(item.pk), "course_id": str(item.course_id),
+                "author_role": "teacher", "message": item.message,
+                "created_at": item.created_at,
+            } for item in teacher_replies]
+            messages.sort(key=lambda item: item["created_at"], reverse=True)
+        return Response({
+            "courses": [{"course_id": str(item.course_id), "title": item.course.title} for item in enrollments],
+            "sessions": [{
+                "id": str(item.pk), "course_id": str(item.course_id),
+                "course_title": item.course.title, "title": item.title,
+                "description": item.description, "meeting_url": item.meeting_url,
+                "starts_at": item.starts_at, "ends_at": item.ends_at,
+                "status": item.status,
+                "attended": PortalClassroomAttendance.objects.filter(session=item, student=request.user).exists(),
+            } for item in sessions],
+            "announcements": [{
+                "id": str(item.pk), "course_id": str(item.course_id) if item.course_id else None,
+                "title": item.title, "body": item.body, "created_at": item.created_at,
+            } for item in announcements],
+            "messages": messages[:100],
+        })
+
+    def post(self, request):
+        enrollments = self._enrollments(request)
+        course_ids = {item.course_id for item in enrollments}
+        action = request.data.get("action")
+        if action == "message":
+            course_id = request.data.get("course_id")
+            if course_id not in {str(item) for item in course_ids}:
+                raise serializers.ValidationError({"course_id": "Choose one of your approved courses."})
+            message = request.data.get("message")
+            if not isinstance(message, str) or not message.strip() or len(message) > 3000:
+                raise serializers.ValidationError({"message": "Message must contain 1 to 3000 characters."})
+            item = PortalClassroomMessage.objects.create(
+                course_id=course_id, student=request.user,
+                author_role="student", message=message.strip(),
+            )
+            return Response({"message": {
+                "id": str(item.pk), "course_id": str(item.course_id),
+                "author_role": "student", "message": item.message,
+                "created_at": item.created_at,
+            }}, status=status.HTTP_201_CREATED)
+        if action == "join":
+            session_id = request.data.get("session_id")
+            item = PortalClassroomSession.objects.filter(pk=session_id).first()
+            if not item:
+                raise NotFound("Class session not found.")
+            if item.course_id not in course_ids:
+                raise PermissionDenied("This class is not part of your approved enrolments.")
+            if item.status in ["cancelled", "completed"]:
+                return Response({"detail": "This class is no longer available."}, status=status.HTTP_409_CONFLICT)
+            PortalClassroomAttendance.objects.get_or_create(session=item, student=request.user)
+            return Response({"meeting_url": item.meeting_url, "session_id": str(item.pk)})
+        raise serializers.ValidationError({"action": "Unknown classroom action."})
+
 
 class PortalClassroomSessionListAPIView(APIView):
     authentication_classes = [PortalJWTAuthentication]
