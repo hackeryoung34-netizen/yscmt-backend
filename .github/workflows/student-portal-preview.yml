@@ -31,7 +31,7 @@ jobs:
     env:
       DEBUG: "true"
       SECRET_KEY: ci-only-not-a-production-secret
-      PORTAL_JWT_SIGNING_KEY: ci-only-portal-jwt-secret
+      PORTAL_JWT_SIGNING_KEY: ci-only-portal-jwt-secret-with-at-least-32-bytes
       DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/yscmt_test
     steps:
       - uses: actions/checkout@v4
