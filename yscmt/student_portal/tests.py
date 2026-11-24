@@ -1,11 +1,13 @@
 from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import Mock, patch
+from django.test import override_settings
+from urllib.parse import urlparse, parse_qs
 import bcrypt
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
-from .models import PortalIdentity, PortalCourse, PortalCourseInstructor, PortalLesson, PortalEnrollment, PortalExam, PortalExamQuestion, PortalExamSession, PortalExamAttempt, PortalPayment, PortalPaymentSubmission, PortalCertificate, PortalPracticeSubmission, PortalClassroomSession, PortalClassroomAttendance, PortalClassroomMessage, PortalClassroomAnnouncement, PortalTeacherReply
+from .models import PortalIdentity, PortalPasswordResetToken, PortalCourse, PortalCourseInstructor, PortalLesson, PortalEnrollment, PortalExam, PortalExamQuestion, PortalExamSession, PortalExamAttempt, PortalPayment, PortalPaymentSubmission, PortalCertificate, PortalPracticeSubmission, PortalClassroomSession, PortalClassroomAttendance, PortalClassroomMessage, PortalClassroomAnnouncement, PortalTeacherReply
 
 class StudentPortalAPITests(TestCase):
     def setUp(self):
@@ -816,3 +818,49 @@ class StudentPortalAPITests(TestCase):
         identity.refresh_from_db()
         self.assertTrue(identity.password.startswith("pbkdf2_"))
         self.assertTrue(identity.check_password("StrongPass!2026"))
+
+    @override_settings(EMAIL_HOST="smtp.example.test", DEFAULT_FROM_EMAIL="YSCMT <no-reply@example.test>", FRONTEND_URL="https://portal.example.test")
+    @patch("student_portal.views.send_mail", return_value=1)
+    def test_legacy_user_password_reset_is_single_use_and_unlocks_login(self, send_mock):
+        self.student.must_reset_password = True
+        self.student.save(update_fields=["must_reset_password"])
+        self.client.credentials()
+        blocked = self.client.post(
+            "/api/token/", {"username": "student1", "password": "StrongPass!2026"}, format="json"
+        )
+        self.assertEqual(blocked.status_code, 400)
+        request = self.client.post(
+            "/api/portal/v1/auth/password-reset/request/",
+            {"email": self.student.email}, format="json",
+        )
+        self.assertEqual(request.status_code, 200)
+        email_body = send_mock.call_args.kwargs["message"]
+        reset_url = next(line for line in email_body.splitlines() if line.startswith("https://"))
+        raw_token = parse_qs(urlparse(reset_url).query)["token"][0]
+        confirm = self.client.post(
+            "/api/portal/v1/auth/password-reset/confirm/",
+            {"token": raw_token, "new_password": "NewStrongPass!2026"}, format="json",
+        )
+        self.assertEqual(confirm.status_code, 200)
+        self.student.refresh_from_db()
+        self.assertFalse(self.student.must_reset_password)
+        self.assertTrue(self.student.check_password("NewStrongPass!2026"))
+        second_use = self.client.post(
+            "/api/portal/v1/auth/password-reset/confirm/",
+            {"token": raw_token, "new_password": "AnotherStrongPass!2026"}, format="json",
+        )
+        self.assertEqual(second_use.status_code, 400)
+        login = self.client.post(
+            "/api/token/", {"username": "student1", "password": "NewStrongPass!2026"}, format="json"
+        )
+        self.assertEqual(login.status_code, 200)
+
+    def test_password_reset_fails_closed_without_email_provider(self):
+        self.client.credentials()
+        with override_settings(EMAIL_HOST=""):
+            response = self.client.post(
+                "/api/portal/v1/auth/password-reset/request/",
+                {"email": self.student.email}, format="json",
+            )
+        self.assertEqual(response.status_code, 503)
+        self.assertFalse(PortalPasswordResetToken.objects.exists())
