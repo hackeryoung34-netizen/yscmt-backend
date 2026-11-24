@@ -936,7 +936,7 @@ class PortalPracticeSubmissionAPIView(APIView):
         if request.user.role != PortalIdentity.ROLE_STUDENT:
             raise PermissionDenied("Student access only.")
         submissions = PortalPracticeSubmission.objects.filter(student=request.user)[:100]
-        return Response({"submissions": [{
+        results = [{
             "id": str(item.pk),
             "lab_key": item.lab_key,
             "title": item.title,
@@ -946,7 +946,8 @@ class PortalPracticeSubmissionAPIView(APIView):
             "reviewer_notes": item.reviewer_notes,
             "submitted_at": item.submitted_at,
             "reviewed_at": item.reviewed_at,
-        } for item in submissions]})
+        } for item in submissions]
+        return Response({"submissions": results, "results": results})
 
     def post(self, request):
         if request.user.role != PortalIdentity.ROLE_STUDENT:
@@ -1403,7 +1404,7 @@ class PortalAdminPracticeReviewAPIView(APIView):
                 default=2, output_field=models.IntegerField(),
             ), "-submitted_at"
         )[:300]
-        return Response({"submissions": [{
+        results = [{
             "id": str(item.pk),
             "student_id": str(item.student_id),
             "student_name": item.student.full_name or item.student.username,
@@ -1417,7 +1418,8 @@ class PortalAdminPracticeReviewAPIView(APIView):
             "submitted_at": item.submitted_at,
             "reviewed_at": item.reviewed_at,
             "reviewed_by": item.reviewed_by.username if item.reviewed_by else None,
-        } for item in items]})
+        } for item in items]
+        return Response({"submissions": results, "results": results})
 
     def post(self, request, submission_id):
         if request.user.role != PortalIdentity.ROLE_ADMIN:
