@@ -67,6 +67,30 @@ class SourceAudit:
                 self.orphans[table] += 1
                 self.errors.append(f"{table}: unresolved {field} reference ({self.orphans[table]})")
 
+    def unique(self, table, fields, *, casefold_fields=()):
+        seen = set()
+        for row in self.rows(table):
+            values = []
+            skip = False
+            for field in fields:
+                value = row.get(field)
+                if value in (None, ""):
+                    skip = True
+                    break
+                if field in casefold_fields and isinstance(value, str):
+                    value = value.strip().casefold()
+                values.append(str(value))
+            # Nullable unique columns permit multiple NULL/empty values in PostgreSQL.
+            if skip:
+                continue
+            key = tuple(values)
+            if key in seen:
+                self.duplicates[table] += 1
+                self.errors.append(
+                    f"{table}: duplicate unique key ({', '.join(fields)})"
+                )
+            seen.add(key)
+
     def run(self):
         missing = sorted(set(SOURCE_TABLES) - set(self.data))
         extra = sorted(set(self.data) - set(SOURCE_TABLES))
@@ -96,6 +120,24 @@ class SourceAudit:
         self.ids("student_certificates")
         self.ids("admin_audit_logs", uuid_only=False)
         self.ids("site_settings", key="setting_key", uuid_only=False)
+
+        # Mirror source unique indexes and target identity constraints before import.
+        self.unique("users", ("email",), casefold_fields=("email",))
+        self.unique("users", ("google_sub",))
+        self.unique("users", ("hatchable_user_id",))
+        self.unique("student_profiles", ("user_id",))
+        self.unique("courses", ("title",), casefold_fields=("title",))
+        self.unique("enrollments", ("user_id", "course_id"))
+        self.unique("classroom_attendance", ("session_id", "user_id"))
+        self.unique("paystack_payments", ("reference",))
+        self.unique("student_certificates", ("certificate_code",))
+        self.unique("student_certificates", ("user_id", "course_id"))
+        self.unique("site_settings", ("setting_key",))
+
+        for row in self.rows("users"):
+            email = row.get("email")
+            if not isinstance(email, str) or "@" not in email or email.strip() != email:
+                self.errors.append("users: missing or malformed email address")
 
         for table, field, allowed, nullable in (
             ("student_profiles", "user_id", users, False),
