@@ -29,9 +29,8 @@ A Django-native portal foundation exists under `yscmt/student_portal/`:
 
 ## CI verification
 
-- Previous complete Student Portal CI passed on commit `da7bc047dcc187d7c44c00d70805c6a72220b5a3`, run [45342438730](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45342438730). It verified Django checks, migration drift, all migrations against disposable PostgreSQL 16, and the initial exam API tests.
-- The additional expired-session test was added in commit `fbcd83620df92933a41aa630f18e3187f79ca7c6`; its workflow run is pending verification.
-- A separate legacy workflow currently reports failure with no jobs returned by the GitHub jobs endpoint. This is distinct from the dedicated preview workflow and needs separate investigation.
+- Student Portal preview CI passed on commit `fbcd83620df92933a41aa630f18e3187f79ca7c6`, run [45342580218](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45342580218). It verified Django checks, migration drift, all migrations against disposable PostgreSQL 16, and the Student Portal API tests including exam timeout handling.
+- A separate legacy workflow reports failure with no jobs returned by the GitHub jobs endpoint. This is distinct from the dedicated preview workflow and remains a separate investigation item.
 
 ## Remaining feature parity
 
