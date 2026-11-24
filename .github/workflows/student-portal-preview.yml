@@ -43,6 +43,16 @@ jobs:
           cache-dependency-path: yscmt/requirements.txt
       - name: Install dependencies
         run: python -m pip install --upgrade pip && pip install -r requirements.txt
+      - name: Verify preview rejects missing DATABASE_URL and SQLite
+        run: |
+          if env -u DATABASE_URL python manage.py check; then
+            echo "Preview unexpectedly accepted a missing DATABASE_URL." >&2
+            exit 1
+          fi
+          if DATABASE_URL=sqlite:////tmp/preview-test.sqlite3 python manage.py check; then
+            echo "Preview unexpectedly accepted SQLite." >&2
+            exit 1
+          fi
       - name: Django system checks
         run: python manage.py check
       - name: Check migration files
