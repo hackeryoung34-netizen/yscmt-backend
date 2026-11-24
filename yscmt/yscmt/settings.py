@@ -122,10 +122,16 @@ WSGI_APPLICATION = "yscmt.wsgi.application"
 # Database
 # ==========================================================
 
-# The independent portal API reads/writes Supabase through caller-scoped RPCs.
-# The ephemeral SQLite fallback exists only so Django can initialize on Vercel;
-# it is NOT a persistent database and must never be used for student records.
-# Configure DATABASE_URL only if a separately reviewed legacy Django feature needs it.
+# The temporary SQLite fallback is retained only for local/legacy initialization.
+# A migration preview must explicitly require a persistent PostgreSQL DATABASE_URL.
+PORTAL_REQUIRE_POSTGRES = os.environ.get("PORTAL_REQUIRE_POSTGRES", "false").strip().lower() == "true"
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+if PORTAL_REQUIRE_POSTGRES and not DATABASE_URL:
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured("DATABASE_URL must point to PostgreSQL when PORTAL_REQUIRE_POSTGRES=true.")
+if PORTAL_REQUIRE_POSTGRES and DATABASE_URL.lower().startswith("sqlite"):
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured("SQLite is disabled for Student Portal preview records; configure Neon PostgreSQL.")
 DATABASES = {
     "default": dj_database_url.config(
         default="sqlite:////tmp/yscmt-vercel-ephemeral.sqlite3"
