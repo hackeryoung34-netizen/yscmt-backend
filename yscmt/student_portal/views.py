@@ -3,24 +3,36 @@ from datetime import timedelta
 from decimal import Decimal, ROUND_HALF_UP
 import os
 import uuid
-import requests
+import re
+import hashlib
+import secrets
+from urllib.parse import urlencodequests
 import re
 from rest_framework import generics, serializers, status
 from rest_framework.exceptions import APIException, NotFound, PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from django.utils import timezone
+from django.conf import settings
+from django.core.mail import send_mail
+from django.contrib.auth.password_validation import validate_password
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .authentication import PortalJWTAuthentication
 from .storage import generate_receipt_upload_form, verify_uploaded_receipt, generate_receipt_download_url, ReceiptStorageError
-from .models import (PortalIdentity, PortalCourse, PortalCourseInstructor, PortalLesson, PortalEnrollment, PortalLessonProgress, PortalExam, PortalExamQuestion, PortalExamSession, PortalExamAttempt, PortalPayment, PortalPaymentSubmission, PortalCertificate, PortalPracticeSubmission, PortalClassroomSession, PortalClassroomAttendance, PortalClassroomMessage, PortalClassroomAnnouncement, PortalTeacherReply, PortalAuditLog)
+from .models import (PortalIdentity, PortalPasswordResetToken, PortalCourse, PortalCourseInstructor, PortalLesson, PortalEnrollment, PortalLessonProgress, PortalExam, PortalExamQuestion, PortalExamSession, PortalExamAttempt, PortalPayment, PortalPaymentSubmission, PortalCertificate, PortalPracticeSubmission, PortalClassroomSession, PortalClassroomAttendance, PortalClassroomMessage, PortalClassroomAnnouncement, PortalTeacherReply, PortalAuditLog)
 from .serializers import PortalRegisterSerializer, PortalTokenSerializer, PortalCourseSerializer, PortalLessonSerializer, PortalEnrollmentCreateSerializer, PortalExamSubmitSerializer, PortalPracticeSubmitSerializer, PortalClassroomMessageSerializer
 
 class PortalStorageUnavailable(APIException):
     status_code = 503
     default_detail = "Private receipt storage is not configured or is temporarily unavailable."
     default_code = "private_storage_unavailable"
+
+
+class PortalEmailUnavailable(APIException):
+    status_code = 503
+    default_detail = "Password reset email is not configured or is temporarily unavailable."
+    default_code = "password_reset_email_unavailable"
 
 
 class PortalRegisterAPIView(generics.CreateAPIView):
@@ -43,6 +55,87 @@ class PortalTokenObtainPairView(APIView):
         serializer = PortalTokenSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         return Response(serializer.validated_data)
+
+
+class PortalPasswordResetRequestAPIView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        email = serializers.EmailField().run_validation(request.data.get("email"))
+        if not settings.EMAIL_HOST:
+            raise PortalEmailUnavailable()
+        identity = PortalIdentity.objects.filter(email__iexact=email, is_active=True).first()
+        if not identity:
+            return Response({"detail": "If the account exists, a reset link has been sent."})
+        recent = PortalPasswordResetToken.objects.filter(
+            identity=identity, created_at__gte=timezone.now() - timedelta(seconds=60),
+            used_at__isnull=True,
+        ).exists()
+        if recent:
+            return Response({"detail": "If the account exists, a reset link has been sent."})
+        now = timezone.now()
+        PortalPasswordResetToken.objects.filter(
+            identity=identity, used_at__isnull=True
+        ).update(used_at=now)
+        raw_token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+        PortalPasswordResetToken.objects.create(
+            identity=identity, token_hash=token_hash,
+            expires_at=now + timedelta(minutes=30),
+        )
+        reset_url = settings.FRONTEND_URL + "/reset-password?" + urlencode({"token": raw_token})
+        message = (
+            f"Hello {identity.full_name or identity.username},\n\n"
+            f"Use this secure link to set your YSCMT Student Portal password. "
+            f"It expires in 30 minutes and can be used once:\n{reset_url}\n\n"
+            "If you did not request this, you can ignore this email."
+        )
+        try:
+            sent = send_mail(
+                subject="Reset your YSCMT Student Portal password",
+                message=message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[identity.email],
+                fail_silently=False,
+            )
+            if sent != 1:
+                raise RuntimeError("Password reset email was not accepted by the email backend.")
+        except Exception as exc:
+            PortalPasswordResetToken.objects.filter(token_hash=token_hash).update(used_at=timezone.now())
+            raise PortalEmailUnavailable() from exc
+        return Response({"detail": "If the account exists, a reset link has been sent."})
+
+
+class PortalPasswordResetConfirmAPIView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def post(self, request):
+        raw_token = request.data.get("token")
+        raw_password = request.data.get("new_password")
+        if not isinstance(raw_token, str) or len(raw_token) < 20 or len(raw_token) > 200:
+            raise serializers.ValidationError({"token": "A valid reset token is required."})
+        if not isinstance(raw_password, str):
+            raise serializers.ValidationError({"new_password": "A new password is required."})
+        validate_password(raw_password)
+        token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+        with transaction.atomic():
+            token = PortalPasswordResetToken.objects.select_for_update().select_related("identity").filter(
+                token_hash=token_hash, used_at__isnull=True, expires_at__gt=timezone.now(),
+                identity__is_active=True,
+            ).first()
+            if not token:
+                raise serializers.ValidationError({"token": "This reset link is invalid or expired."})
+            identity = token.identity
+            identity.set_password(raw_password)
+            identity.must_reset_password = False
+            if identity.email_verified_at is None:
+                identity.email_verified_at = timezone.now()
+            identity.save(update_fields=["password", "must_reset_password", "email_verified_at", "updated_at"])
+            now = timezone.now()
+            PortalPasswordResetToken.objects.filter(identity=identity, used_at__isnull=True).update(used_at=now)
+        return Response({"detail": "Password updated. You can now sign in."})
 
 
 class PortalMeAPIView(APIView):
