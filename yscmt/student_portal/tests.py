@@ -1,6 +1,7 @@
 from datetime import timedelta
 from decimal import Decimal
 from unittest.mock import Mock, patch
+import bcrypt
 from django.test import TestCase
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -800,3 +801,18 @@ class StudentPortalAPITests(TestCase):
         self.assertEqual(self.student.phone, "+2348000000000")
         self.assertEqual(self.student.avatar_url, "https://cdn.example.test/avatar.png")
         self.assertEqual(self.student.role, PortalIdentity.ROLE_STUDENT)
+
+    def test_legacy_supabase_bcrypt_password_is_verified_and_upgraded_on_login(self):
+        legacy_hash = bcrypt.hashpw(b"StrongPass!2026", bcrypt.gensalt()).decode("utf-8")
+        identity = PortalIdentity(username="legacybcrypt", email="legacybcrypt@example.test", password=legacy_hash)
+        identity.save()
+        self.client.credentials()
+        response = self.client.post(
+            "/api/token/",
+            {"username": "legacybcrypt", "password": "StrongPass!2026"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        identity.refresh_from_db()
+        self.assertTrue(identity.password.startswith("pbkdf2_"))
+        self.assertTrue(identity.check_password("StrongPass!2026"))
