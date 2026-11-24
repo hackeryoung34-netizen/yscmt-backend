@@ -12,7 +12,7 @@ from .views import (
     PortalClassroomSessionListAPIView, PortalClassroomJoinAPIView,
     PortalClassroomMessageAPIView, PortalClassroomAnnouncementsAPIView,
     PortalTeacherRepliesAPIView, PortalPracticeSubmissionAPIView,
-    PortalAdminEnrollmentAPIView, PortalAdminPracticeReviewAPIView, PortalAdminAuditLogAPIView,
+    PortalAdminEnrollmentAPIView, PortalAdminPracticeReviewAPIView, PortalAdminAuditLogAPIView,\n    PortalAdminOverviewAPIView, PortalAdminStudentListAPIView,
 )
 
 urlpatterns = [
@@ -40,7 +40,7 @@ urlpatterns = [
     path("courses/<uuid:course_id>/classroom/announcements/", PortalClassroomAnnouncementsAPIView.as_view(), name="portal-classroom-announcements"),
     path("courses/<uuid:course_id>/classroom/teacher-replies/", PortalTeacherRepliesAPIView.as_view(), name="portal-teacher-replies"),
     path("practice/submissions/", PortalPracticeSubmissionAPIView.as_view(), name="portal-practice-submissions"),
-    path("admin/enrollments/", PortalAdminEnrollmentAPIView.as_view(), name="portal-admin-enrollments"),
+    path("admin/overview/", PortalAdminOverviewAPIView.as_view(), name="portal-admin-overview"),\n    path("admin/students/", PortalAdminStudentListAPIView.as_view(), name="portal-admin-students"),\n    path("admin/enrollments/", PortalAdminEnrollmentAPIView.as_view(), name="portal-admin-enrollments"),
     path("admin/enrollments/<uuid:enrollment_id>/review/", PortalAdminEnrollmentAPIView.as_view(), name="portal-admin-enrollment-review"),
     path("admin/practice/submissions/<uuid:submission_id>/review/", PortalAdminPracticeReviewAPIView.as_view(), name="portal-admin-practice-review"),
     path("admin/audit-logs/", PortalAdminAuditLogAPIView.as_view(), name="portal-admin-audit-logs"),
