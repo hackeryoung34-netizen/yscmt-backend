@@ -252,7 +252,7 @@ class PortalClassroomSession(models.Model):
     starts_at = models.DateTimeField()
     ends_at = models.DateTimeField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="scheduled")
-    created_by = models.ForeignKey(PortalIdentity, related_name="classroom_sessions_created", null=True, blank=True, on_delete=models.SET_NULL)
+    created_by = models.ForeignKey(PortalIdentity, related_name="classroom_sessions_created", null=True, blank=True, on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -295,7 +295,7 @@ class PortalClassroomAnnouncement(models.Model):
     title = models.CharField(max_length=220)
     body = models.TextField()
     published = models.BooleanField(default=True)
-    created_by = models.ForeignKey(PortalIdentity, related_name="classroom_announcements_created", null=True, blank=True, on_delete=models.SET_NULL)
+    created_by = models.ForeignKey(PortalIdentity, related_name="classroom_announcements_created", null=True, blank=True, on_delete=models.PROTECT)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -305,7 +305,7 @@ class PortalClassroomAnnouncement(models.Model):
 class PortalTeacherReply(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     course = models.ForeignKey(PortalCourse, related_name="teacher_replies", on_delete=models.CASCADE)
-    created_by = models.ForeignKey(PortalIdentity, related_name="teacher_replies", null=True, blank=True, on_delete=models.SET_NULL)
+    created_by = models.ForeignKey(PortalIdentity, related_name="teacher_replies", null=True, blank=True, on_delete=models.PROTECT)
     message = models.CharField(max_length=2000)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -316,6 +316,7 @@ class PortalAuditLog(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     actor = models.ForeignKey(PortalIdentity, related_name="audit_events", null=True, blank=True, on_delete=models.SET_NULL)
     actor_handle = models.CharField(max_length=255, blank=True, default="")
+    legacy_id = models.BigIntegerField(null=True, blank=True, unique=True)
     action = models.CharField(max_length=80)
     target_type = models.CharField(max_length=80)
     target_id = models.CharField(max_length=80, null=True, blank=True)
