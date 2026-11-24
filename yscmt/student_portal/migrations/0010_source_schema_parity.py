@@ -17,8 +17,8 @@ class Migration(migrations.Migration):
             field=models.DateTimeField(default=django.utils.timezone.now),
             preserve_default=False,
         ),
-        migrations.AlterField(
-            model_name="portalpracticeSubmission".lower(),
+        migrations.AddField(
+            model_name="portalpracticesubmission",
             name="reviewed_by",
             field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name="practice_reviews", to="student_portal.portalidentity"),
         ),
