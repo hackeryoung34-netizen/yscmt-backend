@@ -474,3 +474,31 @@ class StudentPortalAPITests(TestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('student2')}")
         other_listing = self.client.get("/api/portal/v1/practice/submissions/")
         self.assertEqual(other_listing.data["results"], [])
+
+    def test_admin_can_review_enrollment_and_action_is_audited(self):
+        enrollment = PortalEnrollment.objects.create(
+            student=self.student, course=self.course, status=PortalEnrollment.PENDING
+        )
+        admin = PortalIdentity(username="portaladmin", email="admin@example.test", role=PortalIdentity.ROLE_ADMIN)
+        admin.set_password("StrongPass!2026")
+        admin.save()
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('portaladmin')}")
+        denied = self.client.get("/api/portal/v1/admin/enrollments/")
+        self.assertEqual(denied.status_code, 200)
+        changed = self.client.post(
+            f"/api/portal/v1/admin/enrollments/{enrollment.pk}/review/",
+            {"status": "approved"}, format="json",
+        )
+        self.assertEqual(changed.status_code, 200)
+        enrollment.refresh_from_db()
+        self.assertEqual(enrollment.status, PortalEnrollment.APPROVED)
+        from .models import PortalAuditLog
+        event = PortalAuditLog.objects.get(target_id=str(enrollment.pk))
+        self.assertEqual(event.action, "enrollment.status_changed")
+        self.assertEqual(event.metadata["to"], "approved")
+
+    def test_student_cannot_access_admin_review_or_audit_logs(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('student1')}")
+        self.assertEqual(self.client.get("/api/portal/v1/admin/enrollments/").status_code, 403)
+        self.assertEqual(self.client.get("/api/portal/v1/admin/audit-logs/").status_code, 403)
+
