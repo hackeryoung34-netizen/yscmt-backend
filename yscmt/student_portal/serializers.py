@@ -104,15 +104,26 @@ class PortalExamSubmitSerializer(serializers.Serializer):
 
 class PortalPracticeSubmitSerializer(serializers.Serializer):
     lab_key = serializers.CharField(min_length=1, max_length=100)
-    title = serializers.CharField(min_length=1, max_length=200)
-    submission_text = serializers.CharField(required=False, allow_blank=True, max_length=5000)
-    project_url = serializers.CharField(required=False, allow_blank=True, max_length=2048)
+    title = serializers.CharField(min_length=3, max_length=160)
+    submission_text = serializers.CharField(required=False, allow_blank=True, max_length=8000)
+    project_url = serializers.CharField(required=False, allow_blank=True, max_length=500)
+
+    def validate_lab_key(self, value):
+        allowed = {"computer-intermediate", "cybersecurity-intermediate", "python-intermediate", "web-intermediate", "computer-advanced", "cybersecurity-advanced", "python-advanced", "web-advanced"}
+        if value not in allowed:
+            raise serializers.ValidationError("Choose a valid Practice Lab.")
+        return value
 
     def validate_project_url(self, value):
         value = value.strip()
         if value and not value.startswith("https://"):
             raise serializers.ValidationError("Project links must use HTTPS.")
         return value
+
+    def validate(self, attrs):
+        if not attrs.get("submission_text", "").strip() and not attrs.get("project_url", "").strip():
+            raise serializers.ValidationError("Add project notes or a project link.")
+        return attrs
 
 
 class PortalClassroomMessageSerializer(serializers.Serializer):
