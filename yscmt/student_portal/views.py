@@ -1286,7 +1286,9 @@ class PortalAdminPracticeReviewAPIView(APIView):
             "submission_text": item.submission_text,
             "project_url": item.project_url,
             "status": item.status,
+            "reviewer_notes": item.reviewer_notes,
             "submitted_at": item.submitted_at,
+            "reviewed_at": item.reviewed_at,
         } for item in items]})
 
     def post(self, request, submission_id):
@@ -1351,7 +1353,7 @@ class PortalAdminOverviewAPIView(APIView):
             "enrollments_count": PortalEnrollment.objects.count(),
             "pending_enrollments_count": PortalEnrollment.objects.filter(status=PortalEnrollment.PENDING).count(),
             "pending_paystack_count": PortalPayment.objects.filter(status=PortalPayment.PENDING).count(),
-            "pending_bank_payment_count": PortalPaymentSubmission.objects.filter(status=PortalPaymentSubmission.PENDING).count(),
+            "pending_bank_payments_count": PortalPaymentSubmission.objects.filter(status=PortalPaymentSubmission.PENDING).count(),
             "submitted_practice_count": PortalPracticeSubmission.objects.filter(status="submitted").count(),
             "certificates_count": PortalCertificate.objects.count(),
         })
