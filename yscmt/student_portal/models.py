@@ -233,9 +233,9 @@ class PortalCertificate(models.Model):
 class PortalPracticeSubmission(models.Model):
     STATUS_CHOICES = [
         ("submitted", "Submitted"),
-        ("reviewing", "Reviewing"),
+        ("in_review", "In review"),
         ("approved", "Approved"),
-        ("rejected", "Rejected"),
+        ("needs_changes", "Needs changes"),
     ]
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     student = models.ForeignKey(PortalIdentity, related_name="practice_submissions", on_delete=models.PROTECT)
