@@ -39,7 +39,7 @@ class PortalIdentity(models.Model):
 
 class PortalCourse(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    title = models.CharField(max_length=220)
+    title = models.CharField(max_length=220, unique=True)
     description = models.TextField(blank=True)
     level = models.CharField(max_length=80, blank=True)
     fee_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
@@ -61,6 +61,7 @@ class PortalLesson(models.Model):
     sort_order = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["sort_order", "created_at"]
@@ -230,6 +231,7 @@ class PortalPracticeSubmission(models.Model):
     reviewer_notes = models.TextField(blank=True)
     submitted_at = models.DateTimeField(auto_now_add=True)
     reviewed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(PortalIdentity, related_name="practice_reviews", null=True, blank=True, on_delete=models.SET_NULL)
 
     class Meta:
         ordering = ["-submitted_at"]
@@ -250,6 +252,7 @@ class PortalClassroomSession(models.Model):
     starts_at = models.DateTimeField()
     ends_at = models.DateTimeField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="scheduled")
+    created_by = models.ForeignKey(PortalIdentity, related_name="classroom_sessions_created", null=True, blank=True, on_delete=models.SET_NULL)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -257,6 +260,7 @@ class PortalClassroomSession(models.Model):
         ordering = ["-starts_at"]
         constraints = [
             models.CheckConstraint(condition=models.Q(ends_at__gt=models.F("starts_at")), name="portal_classroom_end_after_start"),
+            models.CheckConstraint(condition=models.Q(status__in=["scheduled", "live", "completed", "cancelled"]), name="portal_classroom_status_valid"),
         ]
 
 
@@ -276,12 +280,13 @@ class PortalClassroomMessage(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     course = models.ForeignKey(PortalCourse, related_name="classroom_messages", on_delete=models.CASCADE)
     student = models.ForeignKey(PortalIdentity, related_name="classroom_messages", on_delete=models.CASCADE)
-    author_role = models.CharField(max_length=20, default="student")
+    author_role = models.CharField(max_length=20, choices=[("student", "Student"), ("instructor", "Instructor"), ("admin", "Admin")], default="student")
     message = models.CharField(max_length=2000)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["created_at"]
+        constraints = [models.CheckConstraint(condition=models.Q(author_role__in=["student", "instructor", "admin"]), name="portal_classroom_author_role_valid")]
 
 
 class PortalClassroomAnnouncement(models.Model):
@@ -290,6 +295,7 @@ class PortalClassroomAnnouncement(models.Model):
     title = models.CharField(max_length=220)
     body = models.TextField()
     published = models.BooleanField(default=True)
+    created_by = models.ForeignKey(PortalIdentity, related_name="classroom_announcements_created", null=True, blank=True, on_delete=models.SET_NULL)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -299,7 +305,7 @@ class PortalClassroomAnnouncement(models.Model):
 class PortalTeacherReply(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     course = models.ForeignKey(PortalCourse, related_name="teacher_replies", on_delete=models.CASCADE)
-    created_by = models.ForeignKey(PortalIdentity, related_name="teacher_replies", on_delete=models.PROTECT)
+    created_by = models.ForeignKey(PortalIdentity, related_name="teacher_replies", null=True, blank=True, on_delete=models.SET_NULL)
     message = models.CharField(max_length=2000)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -308,10 +314,11 @@ class PortalTeacherReply(models.Model):
 
 class PortalAuditLog(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    actor = models.ForeignKey(PortalIdentity, related_name="audit_events", on_delete=models.PROTECT)
+    actor = models.ForeignKey(PortalIdentity, related_name="audit_events", null=True, blank=True, on_delete=models.SET_NULL)
+    actor_handle = models.CharField(max_length=255, blank=True, default="")
     action = models.CharField(max_length=80)
     target_type = models.CharField(max_length=80)
-    target_id = models.CharField(max_length=80)
+    target_id = models.CharField(max_length=80, null=True, blank=True)
     metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
