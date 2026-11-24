@@ -14,8 +14,11 @@ A Django-native portal foundation exists under `yscmt/student_portal/`:
 - Timed exams, resumable sessions, student-scoped question delivery, server-side scoring, timeouts recorded as failed attempts, and one attempt per session.
 - Correct answer keys are never included in student question responses.
 - Paystack payment initialization uses the stored course fee, never a client-supplied amount. Server-side verification checks success, reference, amount, currency and expected test/live gateway domain before approving enrolment.
-- Bank-transfer receipt metadata model and migration `0008_portal_payment_submission` are implemented. Admin-only review validates enrolment/student/course ownership, stored fee and currency, pending status, and student-prefixed private object key before approval; decisions are audited.
-- Bank-transfer review queue is available at `GET /api/portal/v1/admin/payment-submissions/`; review uses `POST /api/portal/v1/admin/payment-submissions/{submission_id}/review/`. The admin overview includes pending bank submissions.
+- Bank-transfer receipt metadata model and migrations `0008_portal_payment_submission` and `0009_receipt_upload_state` are implemented. A unique constraint permits only one uploading/pending receipt per enrolment.
+- Private receipt upload uses a server-issued, 5-minute S3-compatible presigned POST for Cloudflare R2. The object key is generated server-side under the student's UUID prefix; the POST policy pins content type, owner metadata and a 10 MB maximum. A separate finalize API verifies object ownership metadata, size, content type and PDF/JPEG/PNG file signature before the receipt enters the admin queue.
+- Student/admin receipt access uses 2-minute presigned GET links; students can access only their own receipts. Admin approval re-checks the private object before approving the related pending enrolment. All upload/review actions are audited.
+- Bank-transfer routes: `POST /api/portal/v1/student/payment-submissions/upload/`, `POST /api/portal/v1/student/payment-submissions/{submission_id}/complete-upload/`, `GET /api/portal/v1/payment-submissions/{submission_id}/receipt/`, `GET /api/portal/v1/admin/payment-submissions/`, and `POST /api/portal/v1/admin/payment-submissions/{submission_id}/review/`. The admin overview includes pending bank submissions.
+- R2 credentials are read only from environment variables: `PORTAL_R2_ENDPOINT_URL`, `PORTAL_R2_ACCESS_KEY_ID`, `PORTAL_R2_SECRET_ACCESS_KEY`, and `PORTAL_R2_BUCKET`. Missing credentials fail closed with HTTP 503; no public bucket URLs are used.
 - Certificate issuance requires approved/completed enrolment, completion of all active lessons and a passed exam; issuance is idempotent and certificates are verifiable.
 - Classroom sessions, attendance, student messages, announcements, teacher replies and practice submissions have student-side APIs with enrolment/ownership checks.
 - Admin dashboard counts and student directory are available only to database-authorized admins.
@@ -42,14 +45,15 @@ A Django-native portal foundation exists under `yscmt/student_portal/`:
 
 ## CI verification
 
-- Dedicated Student Portal preview workflow passed on commit `377b2dcea9e7786154a45ee42fd360c1a92c872b`, run [45345817463](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45345817463).
+- The private receipt storage implementation and migration `0009` are under a fresh full CI run [45346716577](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45346716577); do not mark this implementation CI-verified until the run concludes successfully.
+- Dedicated Student Portal preview workflow passed on commit `2be2954c45ea6bff80f55aad4f74c1fa4c7894d4`, run [45346220160](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45346220160).
 - Verified checks include rejection of missing `DATABASE_URL` and SQLite, Django system checks, migration-file consistency, all portal migrations against disposable PostgreSQL, and the complete Student Portal API test suite including the new instructor classroom tests.
 - The separate legacy workflow `portal-api-tests.yml` reports failure with zero jobs returned for this migration branch. Its configured branch filters target the legacy independent branch, so it is not the authoritative check for this new preview branch. The dedicated preview workflow is the required gate.
 
 ## Remaining work before preview deployment
 
 - Reconcile instructor permissions and the full classroom workflow against all source behavior and the frontend contract.
-- Complete private receipt upload/download integration. The payment-submission model and admin review are ready, but no student receipt-upload endpoint is enabled because a private object-storage provider and its credentials have not been configured. Do not accept client-supplied storage keys; add server-issued, owner-bound upload authorization and private downloads only after storage setup.
+- Configure a private Cloudflare R2 bucket and its restricted CORS policy for the approved preview frontend, then add R2 secrets only to the preview service environment. No bucket has been created/configured and no R2 credentials are present in this repository or chat; receipt upload therefore returns HTTP 503 until the owner configures these secrets.
 - Review the full model/schema mapping against Supabase source migrations and Hatchable source records.
 - Add a safe, repeatable synthetic-data migration rehearsal and reconciliation report.
 - Review certificate asset handling and storage migration.
