@@ -6,6 +6,9 @@ from urllib.parse import urlparse, parse_qs
 import bcrypt
 from django.test import TestCase
 from django.utils import timezone
+from django.core.management import call_command
+from io import StringIO
+import os
 from rest_framework.test import APIClient
 from .models import PortalIdentity, PortalPasswordResetToken, PortalCourse, PortalCourseInstructor, PortalLesson, PortalEnrollment, PortalExam, PortalExamQuestion, PortalExamSession, PortalExamAttempt, PortalPayment, PortalPaymentSubmission, PortalCertificate, PortalPracticeSubmission, PortalClassroomSession, PortalClassroomAttendance, PortalClassroomMessage, PortalClassroomAnnouncement, PortalTeacherReply
 
@@ -988,3 +991,18 @@ class StudentPortalAPITests(TestCase):
         )
         self.assertEqual(published.status_code, 200)
         self.assertTrue(published.data["exam"]["active"])
+
+    def test_admin_bootstrap_requires_explicit_confirmation_and_forces_password_reset(self):
+        environment = {
+            "PORTAL_BOOTSTRAP_ADMIN_EMAIL": "owner-admin@example.test",
+            "PORTAL_BOOTSTRAP_ADMIN_USERNAME": "yscmt-owner",
+            "PORTAL_BOOTSTRAP_ADMIN_CONFIRM": "YES",
+        }
+        with patch.dict(os.environ, environment, clear=False):
+            output = StringIO()
+            call_command("bootstrap_portal_admin", confirm=True, stdout=output)
+        admin = PortalIdentity.objects.get(email="owner-admin@example.test")
+        self.assertEqual(admin.role, PortalIdentity.ROLE_ADMIN)
+        self.assertTrue(admin.must_reset_password)
+        self.assertFalse(admin.has_usable_password())
+        self.assertIn("owner-admin@example.test", output.getvalue())
