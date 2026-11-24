@@ -12,7 +12,7 @@ from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .authentication import PortalJWTAuthentication
-from .models import (PortalIdentity, PortalCourse, PortalCourseInstructor, PortalLesson, PortalEnrollment, PortalLessonProgress, PortalExam, PortalExamQuestion, PortalExamSession, PortalExamAttempt, PortalPayment, PortalCertificate, PortalPracticeSubmission, PortalClassroomSession, PortalClassroomAttendance, PortalClassroomMessage, PortalClassroomAnnouncement, PortalTeacherReply, PortalAuditLog)
+from .models import (PortalIdentity, PortalCourse, PortalCourseInstructor, PortalLesson, PortalEnrollment, PortalLessonProgress, PortalExam, PortalExamQuestion, PortalExamSession, PortalExamAttempt, PortalPayment, PortalPaymentSubmission, PortalCertificate, PortalPracticeSubmission, PortalClassroomSession, PortalClassroomAttendance, PortalClassroomMessage, PortalClassroomAnnouncement, PortalTeacherReply, PortalAuditLog)
 from .serializers import PortalRegisterSerializer, PortalTokenSerializer, PortalCourseSerializer, PortalLessonSerializer, PortalEnrollmentCreateSerializer, PortalExamSubmitSerializer, PortalPracticeSubmitSerializer, PortalClassroomMessageSerializer
 
 class PortalRegisterAPIView(generics.CreateAPIView):
@@ -1019,6 +1019,85 @@ class PortalAdminEnrollmentAPIView(APIView):
                 metadata={"from": previous, "to": new_status, "note": note.strip(), "student_id": str(enrollment.student_id), "course_id": str(enrollment.course_id)},
             )
         return Response({"id": str(enrollment.pk), "status": enrollment.status})
+
+
+
+class PortalAdminPaymentSubmissionAPIView(APIView):
+    authentication_classes = [PortalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if request.user.role != PortalIdentity.ROLE_ADMIN:
+            raise PermissionDenied("Administrator access only.")
+        state = request.query_params.get("status", PortalPaymentSubmission.PENDING)
+        if state not in dict(PortalPaymentSubmission.STATUS_CHOICES):
+            raise serializers.ValidationError({"status": "Invalid bank payment status."})
+        items = PortalPaymentSubmission.objects.filter(status=state).select_related(
+            "student", "course", "enrollment", "reviewed_by"
+        )[:200]
+        return Response({"results": [{
+            "id": str(item.pk),
+            "enrollment_id": str(item.enrollment_id),
+            "student_id": str(item.student_id),
+            "student_name": item.student.full_name or item.student.username,
+            "student_email": item.student.email,
+            "course_id": str(item.course_id),
+            "course_title": item.course.title,
+            "amount": str(item.amount),
+            "currency": item.currency,
+            "transfer_reference": item.transfer_reference,
+            "storage_key": item.storage_key,
+            "content_type": item.content_type,
+            "file_name": item.file_name,
+            "status": item.status,
+            "admin_note": item.admin_note,
+            "submitted_at": item.submitted_at,
+            "reviewed_at": item.reviewed_at,
+        } for item in items]})
+
+    def post(self, request, submission_id):
+        if request.user.role != PortalIdentity.ROLE_ADMIN:
+            raise PermissionDenied("Administrator access only.")
+        new_status = request.data.get("status")
+        note = request.data.get("admin_note", "")
+        if new_status not in [PortalPaymentSubmission.APPROVED, PortalPaymentSubmission.REJECTED]:
+            raise serializers.ValidationError({"status": "Choose approved or rejected."})
+        if not isinstance(note, str) or len(note) > 2000:
+            raise serializers.ValidationError({"admin_note": "Note must be text up to 2000 characters."})
+        with transaction.atomic():
+            item = PortalPaymentSubmission.objects.select_for_update().select_related(
+                "student", "course", "enrollment"
+            ).filter(pk=submission_id).first()
+            if not item:
+                raise NotFound("Bank payment submission not found.")
+            if item.student_id == request.user.pk:
+                raise PermissionDenied("An administrator cannot review their own payment submission.")
+            if item.status != PortalPaymentSubmission.PENDING:
+                raise serializers.ValidationError({"status": "Only pending submissions can be reviewed."})
+            if item.enrollment.student_id != item.student_id or item.enrollment.course_id != item.course_id:
+                raise serializers.ValidationError({"detail": "Payment submission ownership does not match its enrolment."})
+            if item.enrollment.status != PortalEnrollment.PENDING:
+                raise serializers.ValidationError({"detail": "Only a pending enrolment can be approved by bank payment review."})
+            if item.amount != item.course.fee_amount or item.currency != item.course.fee_currency:
+                raise serializers.ValidationError({"detail": "Receipt amount or currency does not match the stored course fee."})
+            if not item.storage_key or not item.storage_key.startswith(f"{item.student_id}/"):
+                raise serializers.ValidationError({"detail": "Receipt storage ownership is invalid."})
+            item.status = new_status
+            item.admin_note = note.strip()
+            item.reviewed_at = timezone.now()
+            item.reviewed_by = request.user
+            item.save(update_fields=["status", "admin_note", "reviewed_at", "reviewed_by"])
+            if new_status == PortalPaymentSubmission.APPROVED:
+                item.enrollment.status = PortalEnrollment.APPROVED
+                item.enrollment.save(update_fields=["status", "updated_at"])
+            PortalAuditLog.objects.create(
+                actor=request.user, action="payment_submission.reviewed",
+                target_type="payment_submission", target_id=str(item.pk),
+                metadata={"from": PortalPaymentSubmission.PENDING, "to": new_status,
+                          "student_id": str(item.student_id), "course_id": str(item.course_id),
+                          "note": note.strip()},
+            )
+        return Response({"id": str(item.pk), "status": item.status, "reviewed_at": item.reviewed_at})
 
 
 class PortalAdminPracticeReviewAPIView(APIView):
