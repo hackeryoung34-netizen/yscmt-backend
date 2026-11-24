@@ -322,3 +322,16 @@ class PortalAuditLog(models.Model):
             models.Index(fields=["created_at"], name="portal_audit_created_idx"),
         ]
 
+class PortalCourseInstructor(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    course = models.ForeignKey(PortalCourse, related_name="instructor_assignments", on_delete=models.CASCADE)
+    instructor = models.ForeignKey(PortalIdentity, related_name="course_assignments", on_delete=models.PROTECT)
+    assigned_by = models.ForeignKey(PortalIdentity, related_name="instructor_assignments_made", on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["course", "instructor"], name="uniq_portal_course_instructor"),
+        ]
+        ordering = ["course__title", "instructor__username"]
+
