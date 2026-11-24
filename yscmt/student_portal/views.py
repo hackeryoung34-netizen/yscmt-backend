@@ -51,7 +51,32 @@ class PortalMeAPIView(APIView):
 
     def get(self, request):
         user = request.user
-        return Response({"id": str(user.pk), "username": user.username, "email": user.email, "role": user.role, "full_name": user.full_name, "phone": user.phone})
+        return Response({
+            "id": str(user.pk), "username": user.username, "email": user.email,
+            "role": user.role, "full_name": user.full_name, "phone": user.phone,
+            "avatar_url": user.avatar_url,
+        })
+
+    def patch(self, request):
+        user = request.user
+        full_name = request.data.get("full_name", user.full_name)
+        phone = request.data.get("phone", user.phone)
+        avatar_url = request.data.get("avatar_url", user.avatar_url)
+        if not isinstance(full_name, str) or len(full_name) > 200:
+            raise serializers.ValidationError({"full_name": "Name must be text up to 200 characters."})
+        if not isinstance(phone, str) or len(phone) > 40:
+            raise serializers.ValidationError({"phone": "Phone must be text up to 40 characters."})
+        if avatar_url is not None and (not isinstance(avatar_url, str) or (avatar_url and not avatar_url.startswith("https://")) or len(avatar_url) > 2048):
+            raise serializers.ValidationError({"avatar_url": "Avatar URL must be an HTTPS URL up to 2048 characters."})
+        user.full_name = full_name.strip()
+        user.phone = phone.strip()
+        user.avatar_url = avatar_url.strip() if isinstance(avatar_url, str) and avatar_url.strip() else None
+        user.save(update_fields=["full_name", "phone", "avatar_url", "updated_at"])
+        return Response({
+            "id": str(user.pk), "username": user.username, "email": user.email,
+            "role": user.role, "full_name": user.full_name, "phone": user.phone,
+            "avatar_url": user.avatar_url,
+        })
 
 
 class PortalCourseListAPIView(APIView):
