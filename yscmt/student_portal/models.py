@@ -14,6 +14,7 @@ class PortalIdentity(models.Model):
     password = models.CharField(max_length=128)
     full_name = models.CharField(max_length=200, blank=True)
     phone = models.CharField(max_length=40, blank=True)
+    avatar_url = models.URLField(max_length=2048, null=True, blank=True)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default=ROLE_STUDENT)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -375,3 +376,33 @@ class PortalPaymentSubmission(models.Model):
             models.CheckConstraint(condition=models.Q(amount__gte=0), name="portal_bank_amount_nonnegative"),
             models.UniqueConstraint(fields=["enrollment"], condition=models.Q(status__in=["uploading", "pending"]), name="uniq_active_bank_payment_submission"),
         ]
+
+class PortalLegacyUserMap(models.Model):
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("linked", "Linked"),
+        ("verified", "Verified"),
+        ("needs_review", "Needs review"),
+    ]
+    source_system = models.CharField(max_length=50, default="hatchable")
+    legacy_user_id = models.CharField(max_length=255)
+    identity = models.ForeignKey(PortalIdentity, related_name="legacy_user_mappings", on_delete=models.PROTECT)
+    migration_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["source_system", "legacy_user_id"], name="uniq_portal_legacy_source_user"),
+            models.UniqueConstraint(fields=["source_system", "identity"], name="uniq_portal_legacy_source_identity"),
+        ]
+        indexes = [models.Index(fields=["identity"], name="portal_legacy_identity_idx")]
+
+
+class PortalSiteSetting(models.Model):
+    setting_key = models.CharField(max_length=255, primary_key=True)
+    setting_value = models.JSONField(default=dict)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "student_portal_site_settings"
