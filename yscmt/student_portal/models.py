@@ -93,3 +93,72 @@ class PortalLessonProgress(models.Model):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["student", "lesson"], name="uniq_portal_student_lesson_progress")]
+
+class PortalExam(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    course = models.ForeignKey(PortalCourse, related_name="exams", on_delete=models.CASCADE)
+    title = models.CharField(max_length=220)
+    instructions = models.TextField(blank=True)
+    duration_minutes = models.PositiveSmallIntegerField(default=30)
+    pass_mark = models.PositiveSmallIntegerField(default=50)
+    is_active = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["created_at", "title"]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(duration_minutes__gt=0), name="portal_exam_duration_positive"),
+            models.CheckConstraint(condition=models.Q(pass_mark__lte=100), name="portal_exam_pass_mark_max_100"),
+        ]
+
+
+class PortalExamQuestion(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    exam = models.ForeignKey(PortalExam, related_name="questions", on_delete=models.CASCADE)
+    question_text = models.TextField()
+    options = models.JSONField()
+    correct_option = models.PositiveSmallIntegerField()
+    sort_order = models.PositiveIntegerField(default=1)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["sort_order", "created_at"]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(correct_option__lte=3), name="portal_question_correct_option_0_3"),
+        ]
+
+
+class PortalExamSession(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    exam = models.ForeignKey(PortalExam, related_name="sessions", on_delete=models.PROTECT)
+    student = models.ForeignKey(PortalIdentity, related_name="exam_sessions", on_delete=models.PROTECT)
+    started_at = models.DateTimeField(auto_now_add=True)
+    submitted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["exam", "student"],
+                condition=models.Q(submitted_at__isnull=True),
+                name="uniq_active_portal_exam_session",
+            ),
+        ]
+
+
+class PortalExamAttempt(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    session = models.OneToOneField(PortalExamSession, related_name="attempt", on_delete=models.PROTECT)
+    exam = models.ForeignKey(PortalExam, related_name="attempts", on_delete=models.PROTECT)
+    student = models.ForeignKey(PortalIdentity, related_name="exam_attempts", on_delete=models.PROTECT)
+    answers = models.JSONField(default=dict)
+    score = models.PositiveSmallIntegerField(default=0)
+    passed = models.BooleanField(default=False)
+    started_at = models.DateTimeField()
+    submitted_at = models.DateTimeField()
+
+    class Meta:
+        ordering = ["-submitted_at"]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(score__lte=100), name="portal_exam_attempt_score_max_100"),
+        ]
