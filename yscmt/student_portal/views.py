@@ -12,7 +12,7 @@ from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .authentication import PortalJWTAuthentication
-from .models import (PortalIdentity, PortalCourse, PortalLesson, PortalEnrollment, PortalLessonProgress, PortalExam, PortalExamQuestion, PortalExamSession, PortalExamAttempt, PortalPayment)
+from .models import (PortalIdentity, PortalCourse, PortalLesson, PortalEnrollment, PortalLessonProgress, PortalExam, PortalExamQuestion, PortalExamSession, PortalExamAttempt, PortalPayment, PortalCertificate)
 from .serializers import PortalRegisterSerializer, PortalTokenSerializer, PortalCourseSerializer, PortalLessonSerializer, PortalEnrollmentCreateSerializer, PortalExamSubmitSerializer
 
 class PortalRegisterAPIView(generics.CreateAPIView):
@@ -560,4 +560,89 @@ class PortalPaymentVerifyAPIView(APIView):
             "status": payment.status,
             "enrollment_status": enrollment.status,
             "verified_at": payment.verified_at,
+        })
+
+class PortalCertificateRequestAPIView(APIView):
+    authentication_classes = [PortalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, course_id):
+        if request.user.role != PortalIdentity.ROLE_STUDENT:
+            raise PermissionDenied("Student access only.")
+        course = PortalCourse.objects.filter(pk=course_id, is_active=True).first()
+        if not course:
+            raise NotFound("Active course not found.")
+        allowed = PortalEnrollment.objects.filter(
+            student=request.user,
+            course=course,
+            status__in=[PortalEnrollment.APPROVED, PortalEnrollment.COMPLETED],
+        ).exists()
+        if not allowed:
+            raise PermissionDenied("An approved enrolment is required.")
+        total_lessons = PortalLesson.objects.filter(course=course, is_active=True).count()
+        completed_lessons = PortalLessonProgress.objects.filter(
+            student=request.user,
+            lesson__course=course,
+            lesson__is_active=True,
+            completed_at__isnull=False,
+        ).count()
+        if total_lessons == 0 or completed_lessons != total_lessons:
+            raise serializers.ValidationError("Complete every active lesson before requesting a certificate.")
+        passed_exam = PortalExamAttempt.objects.filter(
+            student=request.user, exam__course=course, passed=True
+        ).exists()
+        if not passed_exam:
+            raise serializers.ValidationError("Pass at least one course exam before requesting a certificate.")
+
+        certificate, _ = PortalCertificate.objects.get_or_create(
+            student=request.user,
+            course=course,
+            defaults={
+                "certificate_code": f"YSCMT-{uuid.uuid4().hex[:12].upper()}",
+                "student_name": request.user.full_name.strip() or "YSCMT Student",
+                "course_title": course.title,
+            },
+        )
+        return Response({
+            "id": str(certificate.pk),
+            "certificate_code": certificate.certificate_code,
+            "student_name": certificate.student_name,
+            "course_title": certificate.course_title,
+            "issued_at": certificate.issued_at,
+        }, status=status.HTTP_201_CREATED)
+
+
+class PortalCertificateListAPIView(APIView):
+    authentication_classes = [PortalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if request.user.role != PortalIdentity.ROLE_STUDENT:
+            raise PermissionDenied("Student access only.")
+        certificates = PortalCertificate.objects.filter(student=request.user)
+        return Response({"results": [{
+            "id": str(item.pk),
+            "certificate_code": item.certificate_code,
+            "student_name": item.student_name,
+            "course_title": item.course_title,
+            "issued_at": item.issued_at,
+        } for item in certificates]})
+
+
+class PortalCertificateVerifyAPIView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request, certificate_code):
+        certificate = PortalCertificate.objects.filter(
+            certificate_code=certificate_code.strip().upper()
+        ).first()
+        if not certificate:
+            return Response({"valid": False}, status=status.HTTP_404_NOT_FOUND)
+        return Response({
+            "valid": True,
+            "certificate_code": certificate.certificate_code,
+            "student_name": certificate.student_name,
+            "course_title": certificate.course_title,
+            "issued_at": certificate.issued_at,
         })
