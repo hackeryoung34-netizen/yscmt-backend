@@ -768,7 +768,7 @@ class StudentPortalAPITests(TestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('student1')}")
         response = self.client.post(
             "/api/portal/v1/student/payment-submissions/upload/",
-            {"enrollment_id": str(enrollment.pk), "content_type": "application/pdf", "file_name": "receipt.pdf"},
+            {"enrollment_id": str(enrollment.pk), "content_type": "application/pdf", "file_name": "receipt.pdf", "transfer_reference": "BANK-REF-503"},
             format="json",
         )
         self.assertEqual(response.status_code, 503)
