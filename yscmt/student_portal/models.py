@@ -305,3 +305,20 @@ class PortalTeacherReply(models.Model):
 
     class Meta:
         ordering = ["created_at"]
+
+class PortalAuditLog(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    actor = models.ForeignKey(PortalIdentity, related_name="audit_events", on_delete=models.PROTECT)
+    action = models.CharField(max_length=80)
+    target_type = models.CharField(max_length=80)
+    target_id = models.CharField(max_length=80)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["target_type", "target_id"], name="portal_audit_target_idx"),
+            models.Index(fields=["created_at"], name="portal_audit_created_idx"),
+        ]
+
