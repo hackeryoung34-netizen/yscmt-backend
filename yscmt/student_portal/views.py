@@ -2235,6 +2235,16 @@ class PortalAdminOverviewAPIView(APIView):
         return Response({
             **stats,
             "stats": stats,
+            "students_count": stats["students"],
+            "active_courses_count": stats["courses"],
+            "enrollments_count": stats["enrolments"],
+            "pending_enrollments_count": stats["pending"],
+            "lessons_count": stats["lessons"],
+            "exams_count": stats["exams"],
+            "exam_attempts_count": stats["attempts"],
+            "passed_attempts_count": stats["passed"],
+            "pass_rate": stats["passRate"],
+            "certificates_count": stats["certificates"],
             "recentAttempts": [{
                 "id": str(item.pk), "score": item.score, "passed": item.passed,
                 "submitted_at": item.submitted_at,
