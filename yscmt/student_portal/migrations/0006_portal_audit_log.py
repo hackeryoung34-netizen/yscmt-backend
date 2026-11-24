@@ -21,4 +21,3 @@ class Migration(migrations.Migration):
         migrations.AddIndex(model_name="portalauditlog", index=models.Index(fields=["target_type", "target_id"], name="portal_audit_target_idx")),
         migrations.AddIndex(model_name="portalauditlog", index=models.Index(fields=["created_at"], name="portal_audit_created_idx")),
     ]
-}
