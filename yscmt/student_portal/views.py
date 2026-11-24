@@ -916,6 +916,26 @@ class PortalAdminPracticeReviewAPIView(APIView):
     authentication_classes = [PortalJWTAuthentication]
     permission_classes = [IsAuthenticated]
 
+    def get(self, request):
+        if request.user.role != PortalIdentity.ROLE_ADMIN:
+            raise PermissionDenied("Administrator access only.")
+        state = request.query_params.get("status", "submitted")
+        if state not in dict(PortalPracticeSubmission.STATUS_CHOICES):
+            raise serializers.ValidationError({"status": "Invalid practice status."})
+        items = PortalPracticeSubmission.objects.filter(status=state).select_related("student")[:100]
+        return Response({"results": [{
+            "id": str(item.pk),
+            "student_id": str(item.student_id),
+            "student_name": item.student.full_name or item.student.username,
+            "student_email": item.student.email,
+            "lab_key": item.lab_key,
+            "title": item.title,
+            "submission_text": item.submission_text,
+            "project_url": item.project_url,
+            "status": item.status,
+            "submitted_at": item.submitted_at,
+        } for item in items]})
+
     def post(self, request, submission_id):
         if request.user.role != PortalIdentity.ROLE_ADMIN:
             raise PermissionDenied("Administrator access only.")
@@ -960,3 +980,43 @@ class PortalAdminAuditLogAPIView(APIView):
             "metadata": item.metadata,
             "created_at": item.created_at,
         } for item in events]})
+
+
+class PortalAdminOverviewAPIView(APIView):
+    authentication_classes = [PortalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if request.user.role != PortalIdentity.ROLE_ADMIN:
+            raise PermissionDenied("Administrator access only.")
+        return Response({
+            "students_count": PortalIdentity.objects.filter(role=PortalIdentity.ROLE_STUDENT).count(),
+            "active_courses_count": PortalCourse.objects.filter(is_active=True).count(),
+            "enrollments_count": PortalEnrollment.objects.count(),
+            "pending_enrollments_count": PortalEnrollment.objects.filter(status=PortalEnrollment.PENDING).count(),
+            "pending_paystack_count": PortalPayment.objects.filter(status=PortalPayment.PENDING).count(),
+            "submitted_practice_count": PortalPracticeSubmission.objects.filter(status="submitted").count(),
+            "certificates_count": PortalCertificate.objects.count(),
+        })
+
+
+class PortalAdminStudentListAPIView(APIView):
+    authentication_classes = [PortalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if request.user.role != PortalIdentity.ROLE_ADMIN:
+            raise PermissionDenied("Administrator access only.")
+        records = PortalIdentity.objects.filter(role=PortalIdentity.ROLE_STUDENT).annotate(
+            enrollment_count=models.Count("enrollments")
+        ).order_by("-created_at")[:100]
+        return Response({"results": [{
+            "user_id": str(item.pk),
+            "email": item.email,
+            "username": item.username,
+            "full_name": item.full_name,
+            "phone": item.phone,
+            "role": item.role,
+            "created_at": item.created_at,
+            "enrollment_count": item.enrollment_count,
+        } for item in records]})
