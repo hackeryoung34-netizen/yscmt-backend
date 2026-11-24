@@ -318,3 +318,31 @@ class StudentPortalAPITests(TestCase):
             )
         self.assertEqual(response.status_code, 503)
         self.assertEqual(PortalPayment.objects.count(), 0)
+
+def test_payment_initialization_creates_secure_reference_for_new_intent(self):
+        self.course.fee_amount = Decimal("2500.00")
+        self.course.fee_currency = "NGN"
+        self.course.save()
+        enrollment = PortalEnrollment.objects.create(
+            student=self.student, course=self.course, status=PortalEnrollment.PENDING
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('student1')}")
+        gateway = Mock(status_code=200)
+        with patch.dict("os.environ", {"PAYSTACK_SECRET_KEY": "sk_test_example", "PAYSTACK_EXPECTED_DOMAIN": "test"}):
+            with patch("student_portal.views.requests.post") as post:
+                post.return_value = gateway
+                gateway.json.side_effect = lambda: {
+                    "status": True,
+                    "data": {
+                        "reference": post.call_args.kwargs["json"]["reference"],
+                        "authorization_url": "https://checkout.paystack.com/new-example",
+                    },
+                }
+                response = self.client.post(
+                    f"/api/portal/v1/enrollments/{enrollment.pk}/payments/initialize/",
+                    {}, format="json",
+                )
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(response.data["reference"].startswith("YSCMT_"))
+        self.assertEqual(response.data["amount_kobo"], 250000)
+        self.assertEqual(PortalPayment.objects.filter(enrollment=enrollment).count(), 1)
