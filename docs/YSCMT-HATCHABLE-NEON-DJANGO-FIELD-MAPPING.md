@@ -90,3 +90,8 @@ Totals: 21 source tables; 90 rows across the listed tables. This is a point-in-t
 - Configure and test private R2 credentials in a non-production environment; the code fails closed when they are absent.
 - Configure secure password-reset email delivery before any account import.
 - Reconcile every source/target table and receipt object with checksums/counts before considering a production cutover.
+
+
+## Read-only export validation tool
+
+The branch includes `python manage.py audit_hatchable_export --input /secure/path/hatchable-export.json`. This command requires all 21 source tables in a JSON object, validates duplicate keys, UUIDs, foreign keys and exam-session pairing, and emits a sanitized reconciliation summary. It is a dry-run validator only and never writes to Hatchable, Neon or any other database. It has been tested with synthetic fixtures in CI run [45352448601](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45352448601).
