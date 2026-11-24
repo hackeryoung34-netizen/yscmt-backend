@@ -943,12 +943,14 @@ class PortalAdminPracticeReviewAPIView(APIView):
         notes = request.data.get("reviewer_notes", "")
         if new_status not in ["reviewing", "approved", "rejected"]:
             raise serializers.ValidationError({"status": "Choose reviewing, approved or rejected."})
-        if not isinstance(notes, str) or len(notes) > 10000:
-            raise serializers.ValidationError({"reviewer_notes": "Notes must be text up to 10000 characters."})
+        if not isinstance(notes, str) or len(notes) > 2000:
+            raise serializers.ValidationError({"reviewer_notes": "Notes must be text up to 2000 characters."})
         with transaction.atomic():
             item = PortalPracticeSubmission.objects.select_for_update().filter(pk=submission_id).first()
             if not item:
                 raise NotFound("Practice submission not found.")
+            if item.student_id == request.user.pk:
+                raise PermissionDenied("An administrator cannot review their own submission.")
             previous = item.status
             item.status = new_status
             item.reviewer_notes = notes.strip()
