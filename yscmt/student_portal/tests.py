@@ -928,3 +928,24 @@ class StudentPortalAPITests(TestCase):
         item = PortalClassroomSession.objects.get(pk=session_id)
         self.assertEqual(item.status, "live")
         self.assertEqual(item.created_by_handle, "classroomadmin")
+
+    def test_unified_student_classroom_returns_teacher_replies_and_allows_join(self):
+        enrollment = PortalEnrollment.objects.create(student=self.student, course=self.course, status=PortalEnrollment.APPROVED)
+        session = PortalClassroomSession.objects.create(
+            course=self.course, title="Live session", meeting_url="https://meet.example.test",
+            starts_at=timezone.now() - timedelta(minutes=1),
+            ends_at=timezone.now() + timedelta(minutes=30), status="live",
+        )
+        PortalClassroomAnnouncement.objects.create(course=None, title="Global", body="Welcome.")
+        PortalTeacherReply.objects.create(course=self.course, message="Teacher reply.", created_by_handle="teacher")
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('student1')}")
+        listing = self.client.get("/api/portal/v1/classroom/")
+        self.assertEqual(listing.status_code, 200)
+        self.assertEqual(listing.data["courses"][0]["course_id"], str(self.course.pk))
+        self.assertTrue(any(x["author_role"] == "teacher" for x in listing.data["messages"]))
+        self.assertTrue(any(x["course_id"] is None for x in listing.data["announcements"]))
+        joined = self.client.post(
+            "/api/portal/v1/classroom/", {"action": "join", "session_id": str(session.pk)}, format="json"
+        )
+        self.assertEqual(joined.status_code, 200)
+        self.assertTrue(PortalClassroomAttendance.objects.filter(session=session, student=self.student).exists())
