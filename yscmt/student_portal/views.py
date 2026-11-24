@@ -12,7 +12,7 @@ from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .authentication import PortalJWTAuthentication
-from .models import (PortalIdentity, PortalCourse, PortalLesson, PortalEnrollment, PortalLessonProgress, PortalExam, PortalExamQuestion, PortalExamSession, PortalExamAttempt, PortalPayment, PortalCertificate, PortalPracticeSubmission, PortalClassroomSession, PortalClassroomAttendance, PortalClassroomMessage, PortalClassroomAnnouncement, PortalTeacherReply)
+from .models import (PortalIdentity, PortalCourse, PortalLesson, PortalEnrollment, PortalLessonProgress, PortalExam, PortalExamQuestion, PortalExamSession, PortalExamAttempt, PortalPayment, PortalCertificate, PortalPracticeSubmission, PortalClassroomSession, PortalClassroomAttendance, PortalClassroomMessage, PortalClassroomAnnouncement, PortalTeacherReply, PortalAuditLog)
 from .serializers import PortalRegisterSerializer, PortalTokenSerializer, PortalCourseSerializer, PortalLessonSerializer, PortalEnrollmentCreateSerializer, PortalExamSubmitSerializer, PortalPracticeSubmitSerializer, PortalClassroomMessageSerializer
 
 class PortalRegisterAPIView(generics.CreateAPIView):
@@ -844,3 +844,98 @@ class PortalPracticeSubmissionAPIView(APIView):
             "status": item.status,
             "submitted_at": item.submitted_at,
         }, status=status.HTTP_201_CREATED)
+
+
+class PortalAdminEnrollmentAPIView(APIView):
+    authentication_classes = [PortalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if request.user.role != PortalIdentity.ROLE_ADMIN:
+            raise PermissionDenied("Administrator access only.")
+        state = request.query_params.get("status", PortalEnrollment.PENDING)
+        if state not in dict(PortalEnrollment.STATUS_CHOICES):
+            raise serializers.ValidationError({"status": "Invalid enrolment status."})
+        records = PortalEnrollment.objects.filter(status=state).select_related("student", "course")[:200]
+        return Response({"results": [{
+            "id": str(item.pk),
+            "student_id": str(item.student_id),
+            "student_name": item.student.full_name or item.student.username,
+            "student_email": item.student.email,
+            "course_id": str(item.course_id),
+            "course_title": item.course.title,
+            "status": item.status,
+            "created_at": item.created_at,
+        } for item in records]})
+
+    def post(self, request, enrollment_id):
+        if request.user.role != PortalIdentity.ROLE_ADMIN:
+            raise PermissionDenied("Administrator access only.")
+        new_status = request.data.get("status")
+        if new_status not in [PortalEnrollment.APPROVED, PortalEnrollment.REJECTED]:
+            raise serializers.ValidationError({"status": "Choose approved or rejected."})
+        with transaction.atomic():
+            enrollment = PortalEnrollment.objects.select_for_update().select_related("student", "course").filter(pk=enrollment_id).first()
+            if not enrollment:
+                raise NotFound("Enrolment not found.")
+            previous = enrollment.status
+            if previous in [PortalEnrollment.APPROVED, PortalEnrollment.COMPLETED] and new_status == PortalEnrollment.REJECTED:
+                raise serializers.ValidationError({"status": "An approved or completed enrolment cannot be rejected here."})
+            enrollment.status = new_status
+            enrollment.save(update_fields=["status", "updated_at"])
+            PortalAuditLog.objects.create(
+                actor=request.user, action="enrollment.status_changed",
+                target_type="enrollment", target_id=str(enrollment.pk),
+                metadata={"from": previous, "to": new_status, "student_id": str(enrollment.student_id), "course_id": str(enrollment.course_id)},
+            )
+        return Response({"id": str(enrollment.pk), "status": enrollment.status})
+
+
+class PortalAdminPracticeReviewAPIView(APIView):
+    authentication_classes = [PortalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, submission_id):
+        if request.user.role != PortalIdentity.ROLE_ADMIN:
+            raise PermissionDenied("Administrator access only.")
+        new_status = request.data.get("status")
+        notes = request.data.get("reviewer_notes", "")
+        if new_status not in ["reviewing", "approved", "rejected"]:
+            raise serializers.ValidationError({"status": "Choose reviewing, approved or rejected."})
+        if not isinstance(notes, str) or len(notes) > 10000:
+            raise serializers.ValidationError({"reviewer_notes": "Notes must be text up to 10000 characters."})
+        with transaction.atomic():
+            item = PortalPracticeSubmission.objects.select_for_update().filter(pk=submission_id).first()
+            if not item:
+                raise NotFound("Practice submission not found.")
+            previous = item.status
+            item.status = new_status
+            item.reviewer_notes = notes.strip()
+            item.reviewed_at = timezone.now() if new_status in ["approved", "rejected"] else None
+            item.save(update_fields=["status", "reviewer_notes", "reviewed_at"])
+            PortalAuditLog.objects.create(
+                actor=request.user, action="practice.reviewed",
+                target_type="practice_submission", target_id=str(item.pk),
+                metadata={"from": previous, "to": new_status, "student_id": str(item.student_id)},
+            )
+        return Response({"id": str(item.pk), "status": item.status, "reviewed_at": item.reviewed_at})
+
+
+class PortalAdminAuditLogAPIView(APIView):
+    authentication_classes = [PortalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if request.user.role != PortalIdentity.ROLE_ADMIN:
+            raise PermissionDenied("Administrator access only.")
+        events = PortalAuditLog.objects.select_related("actor")[:200]
+        return Response({"results": [{
+            "id": str(item.pk),
+            "actor_id": str(item.actor_id),
+            "actor_username": item.actor.username,
+            "action": item.action,
+            "target_type": item.target_type,
+            "target_id": item.target_id,
+            "metadata": item.metadata,
+            "created_at": item.created_at,
+        } for item in events]})
