@@ -23,6 +23,8 @@ A Django-native portal foundation exists under `yscmt/student_portal/`:
 - Payment initialization and verification run server-side only; secret-key test/live mode is checked before use.
 - Enrolment is approved only after Paystack reports success with matching reference, amount, currency and gateway domain; mismatches leave the enrolment pending.
 - Repeated verification is idempotent, and payment initialization fails closed when gateway secrets are absent.
+- Certificate requests require an approved/completed enrolment, completion of every active lesson, and at least one passed course exam.
+- Certificate issuance is idempotent per student/course; students can list their certificates and the public can verify a certificate code.
 
 ## Exam API routes now added
 
@@ -32,15 +34,18 @@ A Django-native portal foundation exists under `yscmt/student_portal/`:
 - `POST /api/portal/v1/exam-sessions/{session_id}/submit/`
 - `POST /api/portal/v1/enrollments/{enrollment_id}/payments/initialize/`
 - `POST /api/portal/v1/payments/{reference}/verify/`
+- `POST /api/portal/v1/courses/{course_id}/certificates/request/`
+- `GET /api/portal/v1/certificates/`
+- `GET /api/portal/v1/certificates/verify/{certificate_code}/`
 
 ## CI verification
 
-- Student Portal preview CI passed on commit `6ba2f9ad1299553453ff48ade14e65450f3d0459`, run [45343183083](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45343183083). It verified Django checks, migration drift, all migrations against disposable PostgreSQL 16, and the Student Portal API tests including exam timeout and Paystack initialization/verification safeguards.
+- Student Portal preview CI passed on commit `283fc9811bb303c944ffa7321e86119bae22be11`, run [45343460210](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45343460210). It verified Django checks, migration drift, all migrations against disposable PostgreSQL 16, and the Student Portal API tests including exam timeout, Paystack initialization/verification, and certificate eligibility/verification.
 - A separate legacy workflow reports failure with no jobs returned by the GitHub jobs endpoint. This is distinct from the dedicated preview workflow and remains a separate investigation item.
 
 ## Remaining feature parity
 
-Certificates, classroom/practice submissions, attendance, announcements, teacher replies, audit logs, admin workflows, storage migration, Paystack webhook reconciliation, and source-record mapping remain to be implemented and tested.
+Classroom/practice submissions, attendance, announcements, teacher replies, audit logs, admin workflows, storage migration, Paystack webhook reconciliation, and source-record mapping remain to be implemented and tested.
 
 ## Not yet done
 
