@@ -1,4 +1,6 @@
+from datetime import timedelta
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework.test import APIClient
 from .models import PortalIdentity, PortalCourse, PortalLesson, PortalEnrollment, PortalExam, PortalExamQuestion, PortalExamSession, PortalExamAttempt
 
@@ -175,3 +177,25 @@ class StudentPortalAPITests(TestCase):
             f"/api/portal/v1/exam-sessions/{started.data['session_id']}/questions/"
         )
         self.assertEqual(response.status_code, 404)
+
+    def test_expired_exam_session_is_recorded_as_failed_attempt(self):
+        exam, q1, q2 = self.make_exam()
+        self.approve_student()
+        started = self.client.post(f"/api/portal/v1/exams/{exam.pk}/start/", {}, format="json")
+        session = PortalExamSession.objects.get(pk=started.data["session_id"])
+        session.started_at = timezone.now() - timedelta(minutes=31)
+        session.save(update_fields=["started_at"])
+
+        questions = self.client.get(
+            f"/api/portal/v1/exam-sessions/{session.pk}/questions/"
+        )
+        self.assertEqual(questions.status_code, 410)
+
+        submitted = self.client.post(
+            f"/api/portal/v1/exam-sessions/{session.pk}/submit/",
+            {"answers": {str(q1.pk): 0, str(q2.pk): 1}}, format="json",
+        )
+        self.assertEqual(submitted.status_code, 201)
+        self.assertEqual(submitted.data["score"], 0)
+        self.assertFalse(submitted.data["passed"])
+        self.assertEqual(PortalExamAttempt.objects.filter(session=session).count(), 1)
