@@ -11,7 +11,7 @@ from .views import (
     PortalBankReceiptUploadAPIView, PortalBankReceiptFinalizeAPIView, PortalBankReceiptAccessAPIView,
     PortalCertificateRequestAPIView, PortalCertificateListAPIView,
     PortalCertificateVerifyAPIView,
-    PortalClassroomSessionListAPIView, PortalClassroomJoinAPIView,
+    PortalStudentClassroomAPIView, PortalClassroomSessionListAPIView, PortalClassroomJoinAPIView,
     PortalClassroomMessageAPIView, PortalClassroomAnnouncementsAPIView,
     PortalTeacherRepliesAPIView, PortalPracticeSubmissionAPIView,
     PortalAdminEnrollmentAPIView, PortalAdminPracticeReviewAPIView, PortalAdminAuditLogAPIView, PortalAdminPaymentSubmissionAPIView, PortalAdminPaystackPaymentAPIView, PortalAdminClassroomAPIView,
