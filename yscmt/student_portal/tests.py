@@ -455,19 +455,19 @@ class StudentPortalAPITests(TestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('student1')}")
         denied = self.client.post(
             "/api/portal/v1/practice/submissions/",
-            {"lab_key": "linux-01", "title": "Linux Lab"}, format="json",
+            {"lab_key": "python-intermediate", "title": "Linux Lab"}, format="json",
         )
         self.assertEqual(denied.status_code, 403)
         PortalEnrollment.objects.create(student=self.student, course=self.course, status=PortalEnrollment.APPROVED)
         invalid_url = self.client.post(
             "/api/portal/v1/practice/submissions/",
-            {"lab_key": "linux-01", "title": "Linux Lab", "project_url": "http://example.test"},
+            {"lab_key": "python-intermediate", "title": "Linux Lab", "project_url": "http://example.test"},
             format="json",
         )
         self.assertEqual(invalid_url.status_code, 400)
         submitted = self.client.post(
             "/api/portal/v1/practice/submissions/",
-            {"lab_key": "linux-01", "title": "Linux Lab", "submission_text": "Completed", "project_url": "https://example.test/project"},
+            {"lab_key": "python-intermediate", "title": "Linux Lab", "submission_text": "Completed", "project_url": "https://example.test/project"},
             format="json",
         )
         self.assertEqual(submitted.status_code, 201)
@@ -864,3 +864,21 @@ class StudentPortalAPITests(TestCase):
             )
         self.assertEqual(response.status_code, 503)
         self.assertFalse(PortalPasswordResetToken.objects.exists())
+
+    def test_admin_practice_review_uses_source_status_values_and_records_reviewer(self):
+        submission = PortalPracticeSubmission.objects.create(
+            student=self.student, lab_key="python-intermediate", title="Python Lab"
+        )
+        admin = PortalIdentity(username="revieweradmin", email="revieweradmin@example.test", role=PortalIdentity.ROLE_ADMIN)
+        admin.set_password("StrongPass!2026")
+        admin.save()
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('revieweradmin')}")
+        response = self.client.post(
+            f"/api/portal/v1/admin/practice/submissions/{submission.pk}/review/",
+            {"status": "needs_changes", "reviewer_notes": "Please add screenshots."}, format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        submission.refresh_from_db()
+        self.assertEqual(submission.status, "needs_changes")
+        self.assertEqual(submission.reviewed_by, admin)
+        self.assertIsNotNone(submission.reviewed_at)
