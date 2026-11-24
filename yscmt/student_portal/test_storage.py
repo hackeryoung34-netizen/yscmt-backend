@@ -13,10 +13,10 @@ from .storage import (
 
 
 R2_ENV = {
-    "PORTAL_R2_ENDPOINT_URL": "https://account-id.r2.cloudflarestorage.com",
-    "PORTAL_R2_ACCESS_KEY_ID": "test-access-key",
-    "PORTAL_R2_SECRET_ACCESS_KEY": "test-secret-key",
-    "PORTAL_R2_BUCKET": "yscmt-private-receipts",
+    "PORTAL_STORAGE_ENDPOINT_URL": "https://account-id.r2.cloudflarestorage.com",
+    "PORTAL_STORAGE_ACCESS_KEY_ID": "test-access-key",
+    "PORTAL_STORAGE_SECRET_ACCESS_KEY": "test-secret-key",
+    "PORTAL_STORAGE_BUCKET": "yscmt-private-receipts",
 }
 
 
