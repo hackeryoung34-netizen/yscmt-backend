@@ -1,6 +1,6 @@
 import uuid
 from django.db import models
-from django.contrib.auth.hashers import make_password, check_password
+from django.contrib.auth.hashers import make_password, check_password, is_password_usable
 
 class PortalIdentity(models.Model):
     ROLE_STUDENT = "student"
