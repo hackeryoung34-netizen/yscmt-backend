@@ -136,3 +136,12 @@ Keep Hatchable active as the production service and fallback. Do not perform pro
 - SMTP credentials have not been configured and no reset email was sent. Private object storage remains unconfigured; no receipt bucket was created.
 - The current branch head is now `139775de1dc6d5010aee189bceaa3af35f538030` after adding the SMTP setup guide; CI for this documentation-only commit is pending.
 - Hatchable remains live. Neon has no application tables or imported records. Render preview has not been created. No production DNS, Vercel, or Hatchable settings were changed.
+
+
+## Latest verification — 2026-11-24 (commit 83191f3)
+
+- Confirmed the branch head is `83191f3681095519ee8a5e2c91d58bea449d47f6`.
+- Dedicated Student Portal preview workflow run [45490423903](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45490423903) completed successfully on that exact branch head. Its `django-postgres` job completed with conclusion `success`.
+- The prior dedicated preview run [45490403260](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45490403260) also completed successfully on commit `139775de1dc6d5010aee189bceaa3af35f538030`.
+- The separate legacy workflow invocation [45490421276](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45490421276) returned no job records. This is not evidence of a Django/PostgreSQL test failure; the dedicated preview workflow is the verified gate for this branch.
+- This verification used CI's disposable PostgreSQL service. It did not run migrations against the Neon development database and did not create a Render service or change production routing.
