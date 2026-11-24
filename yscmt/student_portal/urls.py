@@ -9,6 +9,9 @@ from .views import (
     PortalPaymentInitializeAPIView, PortalPaymentVerifyAPIView,
     PortalCertificateRequestAPIView, PortalCertificateListAPIView,
     PortalCertificateVerifyAPIView,
+    PortalClassroomSessionListAPIView, PortalClassroomJoinAPIView,
+    PortalClassroomMessageAPIView, PortalClassroomAnnouncementsAPIView,
+    PortalTeacherRepliesAPIView, PortalPracticeSubmissionAPIView,
 )
 
 urlpatterns = [
@@ -30,4 +33,10 @@ urlpatterns = [
     path("courses/<uuid:course_id>/certificates/request/", PortalCertificateRequestAPIView.as_view(), name="portal-certificate-request"),
     path("certificates/", PortalCertificateListAPIView.as_view(), name="portal-certificate-list"),
     path("certificates/verify/<str:certificate_code>/", PortalCertificateVerifyAPIView.as_view(), name="portal-certificate-verify"),
+    path("courses/<uuid:course_id>/classroom/sessions/", PortalClassroomSessionListAPIView.as_view(), name="portal-classroom-sessions"),
+    path("classroom/sessions/<uuid:session_id>/join/", PortalClassroomJoinAPIView.as_view(), name="portal-classroom-join"),
+    path("courses/<uuid:course_id>/classroom/messages/", PortalClassroomMessageAPIView.as_view(), name="portal-classroom-messages"),
+    path("courses/<uuid:course_id>/classroom/announcements/", PortalClassroomAnnouncementsAPIView.as_view(), name="portal-classroom-announcements"),
+    path("courses/<uuid:course_id>/classroom/teacher-replies/", PortalTeacherRepliesAPIView.as_view(), name="portal-teacher-replies"),
+    path("practice/submissions/", PortalPracticeSubmissionAPIView.as_view(), name="portal-practice-submissions"),
 ]
