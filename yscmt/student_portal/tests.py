@@ -202,7 +202,7 @@ class StudentPortalAPITests(TestCase):
         self.assertFalse(submitted.data["passed"])
         self.assertEqual(PortalExamAttempt.objects.filter(session=session).count(), 1)
 
-def test_payment_initialization_uses_stored_fee_not_client_amount(self):
+    def test_payment_initialization_uses_stored_fee_not_client_amount(self):
         self.course.fee_amount = Decimal("15000.00")
         self.course.fee_currency = "NGN"
         self.course.save()
