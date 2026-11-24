@@ -13,7 +13,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .authentication import PortalJWTAuthentication
 from .models import (PortalIdentity, PortalCourse, PortalLesson, PortalEnrollment, PortalLessonProgress, PortalExam, PortalExamQuestion, PortalExamSession, PortalExamAttempt, PortalPayment, PortalCertificate, PortalPracticeSubmission, PortalClassroomSession, PortalClassroomAttendance, PortalClassroomMessage, PortalClassroomAnnouncement, PortalTeacherReply)
-from .serializers import PortalRegisterSerializer, PortalTokenSerializer, PortalCourseSerializer, PortalLessonSerializer, PortalEnrollmentCreateSerializer, PortalExamSubmitSerializer
+from .serializers import PortalRegisterSerializer, PortalTokenSerializer, PortalCourseSerializer, PortalLessonSerializer, PortalEnrollmentCreateSerializer, PortalExamSubmitSerializer, PortalPracticeSubmitSerializer, PortalClassroomMessageSerializer
 
 class PortalRegisterAPIView(generics.CreateAPIView):
     serializer_class = PortalRegisterSerializer
