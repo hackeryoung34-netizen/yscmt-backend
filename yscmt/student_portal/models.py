@@ -33,6 +33,12 @@ class PortalIdentity(models.Model):
     def set_password(self, raw_password):
         self.password = make_password(raw_password)
 
+    def set_unusable_password(self):
+        self.password = make_password(None)
+
+    def has_usable_password(self):
+        return is_password_usable(self.password)
+
     def check_password(self, raw_password):
         # Supabase Auth stores bcrypt hashes as raw $2a$/$2b$/$2y$ strings.
         # Verify those legacy hashes once, then upgrade in place to Django's
