@@ -577,3 +577,20 @@ class StudentPortalAPITests(TestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('student1')}")
         self.assertEqual(self.client.get("/api/portal/v1/instructor/courses/").status_code, 403)
         self.assertEqual(self.client.get("/api/portal/v1/admin/course-instructors/").status_code, 403)
+
+
+    def test_admin_cannot_review_own_practice_submission(self):
+        admin = PortalIdentity(username="practiceadmin", email="practiceadmin@example.test", role=PortalIdentity.ROLE_ADMIN)
+        admin.set_password("StrongPass!2026")
+        admin.save()
+        submission = PortalPracticeSubmission.objects.create(
+            student=admin, lab_key="own-lab", title="Own submission", submission_text="Synthetic"
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('practiceadmin')}")
+        response = self.client.post(
+            f"/api/portal/v1/admin/practice/submissions/{submission.pk}/review/",
+            {"status": "approved", "reviewer_notes": "Reviewed"}, format="json",
+        )
+        self.assertEqual(response.status_code, 403)
+        submission.refresh_from_db()
+        self.assertEqual(submission.status, "submitted")
