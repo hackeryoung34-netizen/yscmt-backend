@@ -392,7 +392,7 @@ class StudentPortalAPITests(TestCase):
         self.assertTrue(verification.data["valid"])
         self.assertEqual(verification.data["student_name"], self.student.full_name or "YSCMT Student")
 
-def test_classroom_sessions_require_enrollment_and_join_is_idempotent(self):
+    def test_classroom_sessions_require_enrollment_and_join_is_idempotent(self):
         self.approve_student()
         now = timezone.now()
         session = PortalClassroomSession.objects.create(
