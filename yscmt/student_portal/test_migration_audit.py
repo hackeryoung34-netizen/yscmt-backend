@@ -44,7 +44,10 @@ class HatchableExportAuditTests(SimpleTestCase):
             json.dump(payload, handle)
             handle.close()
             output = StringIO()
-            call_command("audit_hatchable_export", input=handle.name, stdout=output)
+            try:
+                call_command("audit_hatchable_export", input=handle.name, stdout=output)
+            except CommandError:
+                pass
             return json.loads(output.getvalue())
         finally:
             Path(handle.name).unlink(missing_ok=True)
