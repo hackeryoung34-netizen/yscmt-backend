@@ -754,3 +754,17 @@ class StudentPortalAPITests(TestCase):
         submission.refresh_from_db()
         self.assertEqual(submission.status, PortalPaymentSubmission.PENDING)
         verify_mock.assert_called_once()
+
+    @patch.dict("os.environ", {}, clear=True)
+    def test_receipt_upload_fails_closed_when_private_storage_is_not_configured(self):
+        self.course.fee_amount = Decimal("15000.00")
+        self.course.save()
+        enrollment = PortalEnrollment.objects.create(student=self.student, course=self.course, status=PortalEnrollment.PENDING)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('student1')}")
+        response = self.client.post(
+            "/api/portal/v1/student/payment-submissions/upload/",
+            {"enrollment_id": str(enrollment.pk), "content_type": "application/pdf", "file_name": "receipt.pdf"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 503)
+        self.assertFalse(PortalPaymentSubmission.objects.exists())
