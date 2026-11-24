@@ -2,6 +2,7 @@ from django.db import IntegrityError, transaction
 from datetime import timedelta
 from decimal import Decimal, ROUND_HALF_UP
 import os
+import uuid
 import requests
 from rest_framework import generics, serializers, status
 from rest_framework.exceptions import NotFound, PermissionDenied
