@@ -533,3 +533,18 @@ class StudentPortalAPITests(TestCase):
             {"status": "approved"}, format="json",
         )
         self.assertEqual(response.status_code, 403)
+
+
+    def test_admin_dashboard_and_student_list_are_role_protected(self):
+        admin = PortalIdentity(username="dashboardadmin", email="dashboardadmin@example.test", role=PortalIdentity.ROLE_ADMIN)
+        admin.set_password("StrongPass!2026")
+        admin.save()
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('dashboardadmin')}")
+        overview = self.client.get("/api/portal/v1/admin/overview/")
+        self.assertEqual(overview.status_code, 200)
+        self.assertEqual(overview.data["students_count"], 2)
+        students = self.client.get("/api/portal/v1/admin/students/")
+        self.assertEqual(students.status_code, 200)
+        self.assertEqual(len(students.data["results"]), 2)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('student1')}")
+        self.assertEqual(self.client.get("/api/portal/v1/admin/overview/").status_code, 403)
