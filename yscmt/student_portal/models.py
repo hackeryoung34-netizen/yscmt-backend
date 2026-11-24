@@ -15,6 +15,8 @@ class PortalIdentity(models.Model):
     full_name = models.CharField(max_length=200, blank=True)
     phone = models.CharField(max_length=40, blank=True)
     avatar_url = models.URLField(max_length=2048, null=True, blank=True)
+    email_verified_at = models.DateTimeField(null=True, blank=True)
+    must_reset_password = models.BooleanField(default=False)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default=ROLE_STUDENT)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -420,3 +422,17 @@ class PortalSiteSetting(models.Model):
 
     class Meta:
         db_table = '"private"."site_settings"'
+
+class PortalPasswordResetToken(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    identity = models.ForeignKey(PortalIdentity, related_name="password_reset_tokens", on_delete=models.CASCADE)
+    token_hash = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["identity", "created_at"], name="portal_pwd_identity_idx"),
+            models.Index(fields=["expires_at", "used_at"], name="portal_pwd_expiry_idx"),
+        ]
