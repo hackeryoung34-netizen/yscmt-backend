@@ -1151,6 +1151,30 @@ class PortalBankReceiptAccessAPIView(APIView):
         return Response({"download_url": url, "expires_in": 120})
 
 
+class PortalAdminPaystackPaymentAPIView(APIView):
+    authentication_classes = [PortalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if request.user.role != PortalIdentity.ROLE_ADMIN:
+            raise PermissionDenied("Administrator access only.")
+        items = PortalPayment.objects.select_related(
+            "student", "course", "enrollment"
+        ).order_by("-created_at")[:200]
+        return Response({"results": [{
+            "id": str(item.pk),
+            "reference": item.reference,
+            "student_email": item.student.email,
+            "student_name": item.student.full_name or item.student.username,
+            "course_title": item.course.title,
+            "amount_kobo": item.amount_kobo,
+            "currency": item.currency,
+            "status": item.status,
+            "created_at": item.created_at,
+            "verified_at": item.verified_at,
+        } for item in items]})
+
+
 class PortalAdminPaymentSubmissionAPIView(APIView):
     authentication_classes = [PortalJWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -1207,9 +1231,13 @@ class PortalAdminPaymentSubmissionAPIView(APIView):
                 raise serializers.ValidationError({"detail": "Payment submission ownership does not match its enrolment."})
             if item.enrollment.status != PortalEnrollment.PENDING:
                 raise serializers.ValidationError({"detail": "Only a pending enrolment can be approved by bank payment review."})
-            if item.amount != item.course.fee_amount or item.currency != item.course.fee_currency:
+            if new_status == PortalPaymentSubmission.APPROVED and (
+                item.amount != item.course.fee_amount or item.currency != item.course.fee_currency
+            ):
                 raise serializers.ValidationError({"detail": "Receipt amount or currency does not match the stored course fee."})
-            if not item.storage_key or not item.storage_key.startswith(f"{item.student_id}/"):
+            if new_status == PortalPaymentSubmission.APPROVED and (
+                not item.storage_key or not item.storage_key.startswith(f"{item.student_id}/")
+            ):
                 raise serializers.ValidationError({"detail": "Receipt storage ownership is invalid."})
             if new_status == PortalPaymentSubmission.APPROVED:
                 try:
