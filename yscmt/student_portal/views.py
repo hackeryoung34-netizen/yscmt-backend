@@ -1461,20 +1461,36 @@ class PortalAdminCoursesAPIView(APIView):
         course = PortalCourse.objects.filter(pk=request.data.get("course_id")).first()
         if not course:
             raise NotFound("Course not found.")
-        if "active" in request.data:
+        if "fee_amount" in request.data:
+            try:
+                fee_amount = int(request.data.get("fee_amount"))
+            except (TypeError, ValueError):
+                raise serializers.ValidationError({"fee_amount": "Enter a whole-number NGN course fee."})
+            currency = str(request.data.get("fee_currency", "NGN")).upper()
+            if fee_amount < 0 or fee_amount > 100000000 or currency != "NGN":
+                raise serializers.ValidationError({"fee_amount": "Enter a valid whole-number NGN course fee."})
+            course.fee_amount = Decimal(fee_amount)
+            course.fee_currency = currency
+            course.save(update_fields=["fee_amount", "fee_currency", "updated_at"])
+            action = "course_fee_updated"
+            metadata = {"fee_amount": fee_amount, "fee_currency": currency}
+        elif "active" in request.data:
             if not isinstance(request.data["active"], bool):
                 raise serializers.ValidationError({"active": "Active must be true or false."})
             course.is_active = request.data["active"]
+            course.save(update_fields=["is_active", "updated_at"])
             action = "course_visibility_changed"
             metadata = {"active": course.is_active}
         else:
-            raise serializers.ValidationError({"detail": "Provide active status. Course fees are managed through /admin/payments/."})
-        course.save(update_fields=["is_active", "updated_at"])
+            raise serializers.ValidationError({"detail": "Provide a course fee or active status."})
         PortalAuditLog.objects.create(
             actor=request.user, action=action, target_type="course",
             target_id=str(course.pk), metadata=metadata,
         )
-        return Response({"course": {"id": str(course.pk), "title": course.title, "active": course.is_active}})
+        return Response({"course": {
+            "id": str(course.pk), "title": course.title, "active": course.is_active,
+            "fee_amount": str(course.fee_amount), "fee_currency": course.fee_currency,
+        }})
 
 
 class PortalAdminLessonsAPIView(APIView):
