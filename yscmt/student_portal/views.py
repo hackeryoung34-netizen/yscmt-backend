@@ -7,7 +7,7 @@ import re
 from types import SimpleNamespace
 import hashlib
 import secrets
-from urllib.parse import urlencodequests
+from urllib.parse import urlencode, urlparsequests
 import re
 from rest_framework import generics, serializers, status
 from rest_framework.exceptions import APIException, NotFound, PermissionDenied
@@ -1382,6 +1382,249 @@ class PortalBankReceiptAccessAPIView(APIView):
         except ReceiptStorageError:
             raise PortalStorageUnavailable()
         return Response({"download_url": url, "expires_in": 120})
+
+
+class PortalAdminCoursesAPIView(APIView):
+    authentication_classes = [PortalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def _admin(self, request):
+        if request.user.role != PortalIdentity.ROLE_ADMIN:
+            raise PermissionDenied("Administrator access only.")
+
+    def get(self, request):
+        self._admin(request)
+        courses = PortalCourse.objects.order_by("-created_at")
+        return Response({"courses": [{
+            "id": str(item.pk), "title": item.title, "description": item.description,
+            "level": item.level, "active": item.is_active,
+            "fee_amount": str(item.fee_amount), "fee_currency": item.fee_currency,
+            "created_at": item.created_at,
+        } for item in courses]})
+
+    def post(self, request):
+        self._admin(request)
+        title = request.data.get("title")
+        description = request.data.get("description", "")
+        level = request.data.get("level", "Beginner")
+        if not isinstance(title, str) or not title.strip() or len(title) > 120:
+            raise serializers.ValidationError({"title": "Course title is required (maximum 120 characters)."})
+        if not isinstance(description, str) or len(description) > 1000:
+            raise serializers.ValidationError({"description": "Description must be text up to 1000 characters."})
+        if not isinstance(level, str) or len(level) > 40:
+            raise serializers.ValidationError({"level": "Level must be text up to 40 characters."})
+        try:
+            with transaction.atomic():
+                course = PortalCourse.objects.create(
+                    title=title.strip(), description=description.strip(),
+                    level=level.strip() or "Beginner",
+                )
+        except IntegrityError:
+            raise serializers.ValidationError({"title": "A course with this title already exists."})
+        PortalAuditLog.objects.create(
+            actor=request.user, action="course_created", target_type="course",
+            target_id=str(course.pk), metadata={"title": course.title},
+        )
+        return Response({"course": {
+            "id": str(course.pk), "title": course.title, "description": course.description,
+            "level": course.level, "active": course.is_active,
+            "fee_amount": str(course.fee_amount), "fee_currency": course.fee_currency,
+        }}, status=status.HTTP_201_CREATED)
+
+    def patch(self, request):
+        self._admin(request)
+        course = PortalCourse.objects.filter(pk=request.data.get("course_id")).first()
+        if not course:
+            raise NotFound("Course not found.")
+        if "active" in request.data:
+            if not isinstance(request.data["active"], bool):
+                raise serializers.ValidationError({"active": "Active must be true or false."})
+            course.is_active = request.data["active"]
+            action = "course_visibility_changed"
+            metadata = {"active": course.is_active}
+        else:
+            raise serializers.ValidationError({"detail": "Provide active status. Course fees are managed through /admin/payments/."})
+        course.save(update_fields=["is_active", "updated_at"])
+        PortalAuditLog.objects.create(
+            actor=request.user, action=action, target_type="course",
+            target_id=str(course.pk), metadata=metadata,
+        )
+        return Response({"course": {"id": str(course.pk), "title": course.title, "active": course.is_active}})
+
+
+class PortalAdminLessonsAPIView(APIView):
+    authentication_classes = [PortalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def _admin(self, request):
+        if request.user.role != PortalIdentity.ROLE_ADMIN:
+            raise PermissionDenied("Administrator access only.")
+
+    def get(self, request):
+        self._admin(request)
+        course_id = request.query_params.get("course_id")
+        if not course_id:
+            raise serializers.ValidationError({"course_id": "A course_id is required."})
+        items = PortalLesson.objects.filter(course_id=course_id).order_by("sort_order", "created_at")
+        return Response({"lessons": [{
+            "id": str(item.pk), "course_id": str(item.course_id),
+            "title": item.title, "content": item.content, "video_url": item.video_url,
+            "sort_order": item.sort_order, "active": item.is_active,
+            "created_at": item.created_at,
+        } for item in items]})
+
+    def post(self, request):
+        self._admin(request)
+        course = PortalCourse.objects.filter(pk=request.data.get("course_id")).first()
+        if not course:
+            raise NotFound("Course not found.")
+        title = request.data.get("title")
+        content = request.data.get("content", "")
+        video_url = request.data.get("video_url", "")
+        order = request.data.get("sort_order", 1)
+        if not isinstance(title, str) or not title.strip() or len(title) > 160:
+            raise serializers.ValidationError({"title": "Lesson title is required (maximum 160 characters)."})
+        if not isinstance(content, str) or len(content) > 20000:
+            raise serializers.ValidationError({"content": "Lesson content must be text up to 20000 characters."})
+        if not isinstance(video_url, str) or len(video_url) > 1000:
+            raise serializers.ValidationError({"video_url": "Video URL must be text up to 1000 characters."})
+        if video_url:
+            parsed = urlparse(video_url)
+            if parsed.scheme not in ["http", "https"] or not parsed.netloc:
+                raise serializers.ValidationError({"video_url": "Enter a valid HTTP or HTTPS video URL."})
+        try:
+            order = int(order)
+        except (TypeError, ValueError):
+            raise serializers.ValidationError({"sort_order": "Sort order must be a whole number."})
+        if not 1 <= order <= 10000:
+            raise serializers.ValidationError({"sort_order": "Sort order must be between 1 and 10000."})
+        active = request.data.get("active") is True
+        item = PortalLesson.objects.create(
+            course=course, title=title.strip(), content=content.strip(),
+            video_url=video_url.strip(), sort_order=order, is_active=active,
+        )
+        PortalAuditLog.objects.create(
+            actor=request.user, action="lesson_created", target_type="lesson",
+            target_id=str(item.pk), metadata={"course_id": str(course.pk), "title": item.title, "active": active},
+        )
+        return Response({"lesson": {
+            "id": str(item.pk), "course_id": str(course.pk), "title": item.title,
+            "content": item.content, "video_url": item.video_url,
+            "sort_order": item.sort_order, "active": item.is_active,
+        }}, status=status.HTTP_201_CREATED)
+
+    def patch(self, request):
+        self._admin(request)
+        item = PortalLesson.objects.filter(pk=request.data.get("lesson_id")).first()
+        if not item:
+            raise NotFound("Lesson not found.")
+        active = request.data.get("active")
+        if not isinstance(active, bool):
+            raise serializers.ValidationError({"active": "Active must be true or false."})
+        item.is_active = active
+        item.save(update_fields=["is_active", "updated_at"])
+        PortalAuditLog.objects.create(
+            actor=request.user, action="lesson_visibility_changed",
+            target_type="lesson", target_id=str(item.pk), metadata={"active": active},
+        )
+        return Response({"lesson": {"id": str(item.pk), "active": item.is_active, "title": item.title}})
+
+
+class PortalAdminExamsAPIView(APIView):
+    authentication_classes = [PortalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def _admin(self, request):
+        if request.user.role != PortalIdentity.ROLE_ADMIN:
+            raise PermissionDenied("Administrator access only.")
+
+    def get(self, request):
+        self._admin(request)
+        course_id = request.query_params.get("course_id")
+        if not course_id:
+            raise serializers.ValidationError({"course_id": "A course_id is required."})
+        exams = PortalExam.objects.filter(course_id=course_id).annotate(
+            question_count=models.Count("questions")
+        ).order_by("-created_at")
+        return Response({"exams": [{
+            "id": str(item.pk), "course_id": str(item.course_id), "title": item.title,
+            "instructions": item.instructions, "duration_minutes": item.duration_minutes,
+            "pass_mark": item.pass_mark, "active": item.is_active,
+            "question_count": item.question_count, "created_at": item.created_at,
+        } for item in exams]})
+
+    def post(self, request):
+        self._admin(request)
+        course = PortalCourse.objects.filter(pk=request.data.get("course_id")).first()
+        if not course:
+            raise NotFound("Course not found.")
+        title = request.data.get("title")
+        instructions = request.data.get("instructions", "")
+        questions = request.data.get("questions")
+        if not isinstance(title, str) or not title.strip() or len(title) > 180:
+            raise serializers.ValidationError({"title": "Exam title is required (maximum 180 characters)."})
+        if not isinstance(instructions, str) or len(instructions) > 5000:
+            raise serializers.ValidationError({"instructions": "Instructions must be text up to 5000 characters."})
+        if not isinstance(questions, list) or not 1 <= len(questions) <= 100:
+            raise serializers.ValidationError({"questions": "Add between 1 and 100 questions before saving."})
+        try:
+            duration = int(request.data.get("duration_minutes", 30))
+            pass_mark = int(request.data.get("pass_mark", 50))
+        except (TypeError, ValueError):
+            raise serializers.ValidationError({"duration_minutes": "Duration and pass mark must be whole numbers."})
+        if not 1 <= duration <= 240 or not 0 <= pass_mark <= 100:
+            raise serializers.ValidationError({"duration_minutes": "Duration must be 1–240 minutes and pass mark 0–100."})
+        clean_questions = []
+        for index, question in enumerate(questions, start=1):
+            if not isinstance(question, dict):
+                raise serializers.ValidationError({"questions": "Each question must be an object."})
+            question_text = question.get("question_text")
+            options = question.get("options")
+            correct = question.get("correct_option")
+            if not isinstance(question_text, str) or not question_text.strip() or len(question_text) > 2000:
+                raise serializers.ValidationError({"questions": f"Question {index} needs text up to 2000 characters."})
+            if not isinstance(options, list) or len(options) != 4 or any(not isinstance(x, str) or not x.strip() or len(x) > 500 for x in options):
+                raise serializers.ValidationError({"questions": f"Question {index} needs exactly four non-empty options (maximum 500 characters each)."})
+            if type(correct) is not int or correct not in [0, 1, 2, 3]:
+                raise serializers.ValidationError({"questions": f"Question {index} needs a correct option from 0 to 3."})
+            clean_questions.append((question_text.strip(), [x.strip() for x in options], correct))
+        with transaction.atomic():
+            exam = PortalExam.objects.create(
+                course=course, title=title.strip(), instructions=instructions.strip(),
+                duration_minutes=duration, pass_mark=pass_mark, is_active=False,
+            )
+            for index, (question_text, options, correct) in enumerate(clean_questions, start=1):
+                PortalExamQuestion.objects.create(
+                    exam=exam, question_text=question_text, options=options,
+                    correct_option=correct, sort_order=index,
+                )
+            PortalAuditLog.objects.create(
+                actor=request.user, action="exam_created", target_type="exam",
+                target_id=str(exam.pk), metadata={"course_id": str(course.pk), "title": exam.title, "question_count": len(clean_questions)},
+            )
+        return Response({"exam": {
+            "id": str(exam.pk), "course_id": str(course.pk), "title": exam.title,
+            "duration_minutes": exam.duration_minutes, "pass_mark": exam.pass_mark,
+            "active": exam.is_active,
+        }, "question_count": len(clean_questions), "message": "Exam created as a draft. Publish it when ready."}, status=status.HTTP_201_CREATED)
+
+    def patch(self, request):
+        self._admin(request)
+        exam = PortalExam.objects.filter(pk=request.data.get("exam_id")).first()
+        if not exam:
+            raise NotFound("Exam not found.")
+        active = request.data.get("active")
+        if not isinstance(active, bool):
+            raise serializers.ValidationError({"active": "Active must be true or false."})
+        if active and not exam.questions.exists():
+            raise serializers.ValidationError({"active": "Add questions before publishing this exam."})
+        exam.is_active = active
+        exam.save(update_fields=["is_active", "updated_at"])
+        PortalAuditLog.objects.create(
+            actor=request.user, action="exam_visibility_changed",
+            target_type="exam", target_id=str(exam.pk), metadata={"active": active},
+        )
+        return Response({"exam": {"id": str(exam.pk), "title": exam.title, "active": exam.is_active}})
 
 
 class PortalAdminClassroomAPIView(APIView):
