@@ -882,3 +882,49 @@ class StudentPortalAPITests(TestCase):
         self.assertEqual(submission.status, "needs_changes")
         self.assertEqual(submission.reviewed_by, admin)
         self.assertIsNotNone(submission.reviewed_at)
+
+    def test_admin_classroom_management_matches_source_actions_and_is_admin_only(self):
+        admin = PortalIdentity(username="classroomadmin", email="classroomadmin@example.test", role=PortalIdentity.ROLE_ADMIN)
+        admin.set_password("StrongPass!2026")
+        admin.save()
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('student1')}")
+        denied = self.client.post(
+            "/api/portal/v1/admin/classroom/",
+            {"action": "create_announcement", "title": "All students", "body": "Welcome."},
+            format="json",
+        )
+        self.assertEqual(denied.status_code, 403)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('classroomadmin')}")
+        session = self.client.post(
+            "/api/portal/v1/admin/classroom/",
+            {
+                "action": "create_session", "course_id": str(self.course.pk),
+                "title": "Live class", "description": "Week one",
+                "meeting_url": "https://meet.example.test/class",
+                "starts_at": (timezone.now() + timedelta(hours=1)).isoformat(),
+                "ends_at": (timezone.now() + timedelta(hours=2)).isoformat(),
+            }, format="json",
+        )
+        self.assertEqual(session.status_code, 201)
+        announcement = self.client.post(
+            "/api/portal/v1/admin/classroom/",
+            {"action": "create_announcement", "title": "All students", "body": "Welcome."},
+            format="json",
+        )
+        self.assertEqual(announcement.status_code, 201)
+        self.assertIsNone(PortalClassroomAnnouncement.objects.get(pk=announcement.data["announcement"]["id"]).course_id)
+        reply = self.client.post(
+            "/api/portal/v1/admin/classroom/",
+            {"action": "reply", "course_id": str(self.course.pk), "message": "See lesson one."},
+            format="json",
+        )
+        self.assertEqual(reply.status_code, 201)
+        session_id = session.data["session"]["id"]
+        changed = self.client.patch(
+            "/api/portal/v1/admin/classroom/",
+            {"session_id": session_id, "status": "live"}, format="json",
+        )
+        self.assertEqual(changed.status_code, 200)
+        item = PortalClassroomSession.objects.get(pk=session_id)
+        self.assertEqual(item.status, "live")
+        self.assertEqual(item.created_by_handle, "classroomadmin")
