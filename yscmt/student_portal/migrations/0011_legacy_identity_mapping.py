@@ -20,7 +20,7 @@ class Migration(migrations.Migration):
                 ("migration_status", models.CharField(choices=[("pending", "Pending"), ("linked", "Linked"), ("verified", "Verified"), ("needs_review", "Needs review")], default="pending", max_length=20)),
                 ("created_at", models.DateTimeField(auto_now_add=True)),
                 ("updated_at", models.DateTimeField(auto_now=True)),
-                ("identity", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, related_name="legacy_user_mappings", to="student_portal.portalidentity")),
+                ("identity", models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, db_column="auth_user_id", related_name="legacy_user_mappings", to="student_portal.portalidentity")),
             ],
             options={"db_table": '"private"."legacy_user_map"', "constraints": [
                 models.UniqueConstraint(fields=("source_system", "legacy_user_id"), name="uniq_portal_legacy_source_user"),
