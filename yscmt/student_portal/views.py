@@ -980,7 +980,7 @@ class PortalAdminEnrollmentAPIView(APIView):
             "student_name": item.student.full_name or item.student.username,
             "student_email": item.student.email,
             "course_id": str(item.course_id),
-            "course_title": item.course.title,
+            "course_title": item.enrollment.course.title,
             "status": item.status,
             "created_at": item.created_at,
         } for item in records]})
@@ -1159,7 +1159,7 @@ class PortalAdminPaystackPaymentAPIView(APIView):
         if request.user.role != PortalIdentity.ROLE_ADMIN:
             raise PermissionDenied("Administrator access only.")
         items = PortalPayment.objects.select_related(
-            "student", "course", "enrollment"
+            "student", "enrollment__course"
         ).order_by("-created_at")[:200]
         return Response({"results": [{
             "id": str(item.pk),
