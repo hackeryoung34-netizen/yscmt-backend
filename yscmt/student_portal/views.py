@@ -1184,20 +1184,30 @@ class PortalAdminEnrollmentAPIView(APIView):
     def get(self, request):
         if request.user.role != PortalIdentity.ROLE_ADMIN:
             raise PermissionDenied("Administrator access only.")
-        state = request.query_params.get("status", PortalEnrollment.PENDING)
-        if state not in dict(PortalEnrollment.STATUS_CHOICES):
+        state = request.query_params.get("status")
+        if state and state not in dict(PortalEnrollment.STATUS_CHOICES):
             raise serializers.ValidationError({"status": "Invalid enrolment status."})
-        records = PortalEnrollment.objects.filter(status=state).select_related("student", "course")[:200]
-        return Response({"results": [{
-            "id": str(item.pk),
-            "student_id": str(item.student_id),
-            "student_name": item.student.full_name or item.student.username,
-            "student_email": item.student.email,
-            "course_id": str(item.course_id),
-            "course_title": item.course.title,
-            "status": item.status,
-            "created_at": item.created_at,
-        } for item in records]})
+        records = PortalEnrollment.objects.select_related("student", "course")
+        if state:
+            records = records.filter(status=state)
+        else:
+            records = records.order_by(models.Case(
+                models.When(status=PortalEnrollment.PENDING, then=0),
+                default=1, output_field=models.IntegerField(),
+            ), "-created_at")
+        results = []
+        for item in records[:300]:
+            bank_status = PortalPaymentSubmission.objects.filter(enrollment=item).order_by("-submitted_at").values_list("status", flat=True).first()
+            paystack_status = PortalPayment.objects.filter(enrollment=item).order_by("-created_at").values_list("status", flat=True).first()
+            payment_status = "verified" if bank_status == PortalPaymentSubmission.APPROVED else (bank_status or paystack_status)
+            results.append({
+                "id": str(item.pk), "student_id": str(item.student_id),
+                "student_name": item.student.full_name or item.student.username,
+                "student_email": item.student.email, "course_id": str(item.course_id),
+                "course_title": item.course.title, "status": item.status,
+                "payment_status": payment_status, "created_at": item.created_at,
+            })
+        return Response({"enrolments": results, "results": results})
 
     def post(self, request, enrollment_id):
         if request.user.role != PortalIdentity.ROLE_ADMIN:
@@ -1215,6 +1225,15 @@ class PortalAdminEnrollmentAPIView(APIView):
             previous = enrollment.status
             if enrollment.student_id == request.user.pk:
                 raise PermissionDenied("An administrator cannot review their own enrolment.")
+            if new_status in [PortalEnrollment.APPROVED, PortalEnrollment.COMPLETED] and enrollment.course.fee_amount > 0:
+                bank_paid = PortalPaymentSubmission.objects.filter(
+                    enrollment=enrollment, status=PortalPaymentSubmission.APPROVED,
+                ).exists()
+                paystack_paid = PortalPayment.objects.filter(
+                    enrollment=enrollment, status=PortalPayment.SUCCESS,
+                ).exists()
+                if not bank_paid and not paystack_paid:
+                    raise serializers.ValidationError({"detail": "Verify the bank transfer or Paystack payment before approving this paid course."})
             if previous == PortalEnrollment.COMPLETED and new_status != PortalEnrollment.COMPLETED:
                 raise serializers.ValidationError({"status": "A completed enrolment cannot be downgraded."})
             if previous in [PortalEnrollment.APPROVED, PortalEnrollment.COMPLETED] and new_status == PortalEnrollment.REJECTED:
