@@ -61,7 +61,7 @@ A Django-native portal foundation exists under `yscmt/student_portal/`:
 ## Remaining work before preview deployment
 
 - Reconcile instructor permissions and the full classroom workflow against all source behavior and the frontend contract.
-- Configure a private Cloudflare R2 bucket and its restricted CORS policy for the approved preview frontend, then add R2 secrets only to the preview service environment. The receipt size limit follows Hatchable's existing 5 MB cap. No bucket has been created/configured and no R2 credentials are present in this repository or chat; receipt upload therefore returns HTTP 503 until the owner configures these secrets.
+- Configure a private S3-compatible bucket and restricted CORS policy for the approved preview frontend, then add provider secrets only to the preview service environment. Generic PORTAL_STORAGE_* settings are now supported, with PORTAL_R2_* compatibility aliases. The receipt size limit follows Hatchable's existing 5 MB cap. No bucket has been created/configured and no provider credentials are present; receipt upload therefore fails closed until the owner configures them.
 - Finish a field-by-field schema and Hatchable data reconciliation, including source account/profile mapping and password-hash coverage. The source user mapping/settings tables are now represented, but no source records have been copied.
 - Add a safe, repeatable synthetic-data migration rehearsal and reconciliation report.
 - Review certificate asset handling and storage migration.
@@ -85,7 +85,7 @@ Keep Hatchable active as the production service and fallback. Do not perform pro
 - Added `docs/YSCMT-HATCHABLE-NEON-DJANGO-FIELD-MAPPING.md`: all 21 live Hatchable source tables are mapped to their Django target models, including field transformations, foreign-key mapping, identity reset rules, payment/receipt handling, and exam attempt/session reconciliation.
 - Rechecked Hatchable with read-only aggregate queries. Current snapshot: 5 users, 4 courses, 16 lessons, 4 exams, 40 questions, 20 audit logs and 1 site-setting row; all other listed portal tables are empty. No user names, emails, setting values, audit details, payment details or file contents were exported.
 - Verified the exact Neon development database tree using a read-only catalog inspection: database `yscmt_student_portal` currently contains only the `public` schema and no application tables. Neon has not received migrations or source records.
-- Private receipt-storage integration is implemented against Cloudflare R2 S3-compatible storage using short-lived presigned upload/download links, owner metadata, size/MIME/signature checks, and fail-closed behavior when credentials are absent. It is not operational until non-production R2 credentials and a private bucket are configured and tested.
+- Private receipt-storage integration now supports generic S3-compatible endpoints (including Cloudflare R2 via legacy aliases) using short-lived presigned upload/download links, owner metadata, size/MIME/signature checks, and fail-closed behavior when credentials are absent. The generic provider configuration and legacy R2 compatibility tests passed in CI run [45488323145](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45488323145). It is not operational until a non-production private bucket and credentials are configured and tested.
 - CI run `45350021055` for branch commit `c0b53d396f9e55968134c8207eb3d0c138ab9411` completed successfully: PostgreSQL-only preview guard, Django checks, migration drift checks, migrations against disposable PostgreSQL, and Student Portal API tests.
 - The separate legacy `.github/workflows/portal-api-tests.yml` workflow continues to show a failed invocation with no job records returned by GitHub's jobs endpoint. The dedicated Student Portal preview workflow passes. The legacy workflow is not the authoritative Neon/Django preview check and still needs cleanup/diagnosis.
 - No real data has been exported/imported; no Render preview service has been created; Hatchable version 53 remains active; no production cutover or DNS changes have occurred.
@@ -108,3 +108,13 @@ Keep Hatchable active as the production service and fallback. Do not perform pro
 - Synthetic tests cover a valid snapshot, orphan foreign keys, ambiguous exam sessions, duplicate IDs and malformed JSON.
 - CI run [45352742552](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45352742552) passed on commit `ae4eef9db67ecbd3cabeade0219997de5b0b20f3`, including PostgreSQL migrations, portal API/storage tests, and all synthetic export-audit tests. A test-harness issue in the first export-audit test commit was corrected before this passing run.
 - Usage after a separately approved source export is available: `python manage.py audit_hatchable_export --input /secure/path/hatchable-export.json`. The command is intentionally audit-only; it does not import records.
+
+
+## S3-compatible storage update — 2026-11-24
+
+- Updated `student_portal/storage.py` to accept provider-neutral `PORTAL_STORAGE_ENDPOINT_URL`, `PORTAL_STORAGE_ACCESS_KEY_ID`, `PORTAL_STORAGE_SECRET_ACCESS_KEY`, `PORTAL_STORAGE_BUCKET`, and `PORTAL_STORAGE_REGION`. Existing `PORTAL_R2_*` names remain supported.
+- Added tests for generic provider region selection and backwards compatibility with Cloudflare R2 settings. The full preview CI run [45488323145](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45488323145) passed, including PostgreSQL migrations and all portal API/storage/export-audit tests.
+- Added `docs/PRIVATE-RECEIPT-STORAGE-SETUP.md` with private bucket, CORS, secret handling, upload verification and cost approval requirements.
+- Cloudflare account operations could not proceed because the connected account did not grant authorization. No further access attempt was made, no bucket or credentials were created, and no changes were made to the Cloudflare account.
+- Neon Object Storage is enabled on the development branch, but its pricing page lists storage at $0.023/GB-month. No bucket was created because storage charges have not been approved. See [Neon pricing](https://neon.com/pricing).
+- Hatchable remains active; Neon still has no application tables or source records; no Render preview has been created; no production changes occurred.
