@@ -127,4 +127,4 @@ class PortalPracticeSubmitSerializer(serializers.Serializer):
 
 
 class PortalClassroomMessageSerializer(serializers.Serializer):
-    message = serializers.CharField(min_length=1, max_length=2000)
+    message = serializers.CharField(min_length=1, max_length=3000)
