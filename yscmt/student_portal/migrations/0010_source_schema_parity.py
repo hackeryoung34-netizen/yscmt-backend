@@ -8,6 +8,16 @@ class Migration(migrations.Migration):
     operations = [
         migrations.AlterField(
             model_name="portalcourse",
+            name="level",
+            field=models.CharField(blank=True, default="Beginner", max_length=80),
+        ),
+        migrations.AlterField(
+            model_name="portallesson",
+            name="sort_order",
+            field=models.PositiveIntegerField(default=1),
+        ),
+        migrations.AlterField(
+            model_name="portalcourse",
             name="title",
             field=models.CharField(max_length=220, unique=True),
         ),
