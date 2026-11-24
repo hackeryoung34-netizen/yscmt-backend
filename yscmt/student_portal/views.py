@@ -1,5 +1,8 @@
 from django.db import IntegrityError, transaction
 from datetime import timedelta
+from decimal import Decimal, ROUND_HALF_UP
+import os
+import requests
 from rest_framework import generics, serializers, status
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -8,7 +11,7 @@ from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .authentication import PortalJWTAuthentication
-from .models import (PortalIdentity, PortalCourse, PortalLesson, PortalEnrollment, PortalLessonProgress, PortalExam, PortalExamQuestion, PortalExamSession, PortalExamAttempt)
+from .models import (PortalIdentity, PortalCourse, PortalLesson, PortalEnrollment, PortalLessonProgress, PortalExam, PortalExamQuestion, PortalExamSession, PortalExamAttempt, PortalPayment)
 from .serializers import PortalRegisterSerializer, PortalTokenSerializer, PortalCourseSerializer, PortalLessonSerializer, PortalEnrollmentCreateSerializer, PortalExamSubmitSerializer
 
 class PortalRegisterAPIView(generics.CreateAPIView):
@@ -362,3 +365,198 @@ class PortalExamSubmitAPIView(APIView):
                 "passed": attempt.passed,
                 "submitted_at": attempt.submitted_at,
             }, status=status.HTTP_201_CREATED)
+
+class PortalPaymentInitializeAPIView(APIView):
+    authentication_classes = [PortalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, enrollment_id):
+        if request.user.role != PortalIdentity.ROLE_STUDENT:
+            raise PermissionDenied("Student access only.")
+        secret = os.environ.get("PAYSTACK_SECRET_KEY", "").strip()
+        expected_domain = os.environ.get("PAYSTACK_EXPECTED_DOMAIN", "").strip().lower()
+        if not secret or expected_domain not in ("test", "live"):
+            return Response({"detail": "Online payment is not configured yet."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        if (expected_domain == "test" and not secret.startswith("sk_test_")) or (
+            expected_domain == "live" and not secret.startswith("sk_live_")
+        ):
+            return Response({"detail": "Payment gateway environment configuration is invalid."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        with transaction.atomic():
+            enrollment = PortalEnrollment.objects.select_for_update().select_related("course").filter(
+                pk=enrollment_id,
+                student=request.user,
+                status=PortalEnrollment.PENDING,
+                course__is_active=True,
+            ).first()
+            if not enrollment:
+                raise NotFound("A pending enrolment for an active course was not found.")
+            course = enrollment.course
+            if course.fee_currency != "NGN" or course.fee_amount <= 0:
+                raise serializers.ValidationError("This course is not configured for NGN online payment.")
+            amount_kobo = int((course.fee_amount * Decimal("100")).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+            payment = PortalPayment.objects.filter(
+                enrollment=enrollment, status=PortalPayment.PENDING
+            ).first()
+            if payment and (payment.amount_kobo != amount_kobo or payment.currency != "NGN"):
+                payment.status = PortalPayment.ABANDONED
+                payment.save(update_fields=["status"])
+                payment = None
+            if payment is None:
+                payment = PortalPayment.objects.create(
+                    enrollment=enrollment,
+                    student=request.user,
+                    reference=f"YSCMT_{uuid.uuid4().hex.upper()}",
+                    amount_kobo=amount_kobo,
+                    currency="NGN",
+                    status=PortalPayment.PENDING,
+                )
+            if payment.authorization_url:
+                return Response({
+                    "reference": payment.reference,
+                    "authorization_url": payment.authorization_url,
+                    "amount_kobo": payment.amount_kobo,
+                    "currency": payment.currency,
+                })
+
+        try:
+            response = requests.post(
+                "https://api.paystack.co/transaction/initialize",
+                headers={"Authorization": f"Bearer {secret}", "Content-Type": "application/json"},
+                json={
+                    "email": request.user.email,
+                    "amount": payment.amount_kobo,
+                    "currency": payment.currency,
+                    "reference": payment.reference,
+                    "metadata": {
+                        "student_id": str(request.user.pk),
+                        "enrollment_id": str(enrollment.pk),
+                        "provider": "YSCMT Enterprise",
+                    },
+                },
+                timeout=15,
+            )
+            payload = response.json()
+        except (requests.RequestException, ValueError):
+            return Response({"detail": "Paystack is temporarily unavailable. Please retry shortly."}, status=status.HTTP_502_BAD_GATEWAY)
+
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if response.status_code != 200 or not isinstance(data, dict) or payload.get("status") is not True:
+            return Response({"detail": "Paystack could not initialize this payment."}, status=status.HTTP_502_BAD_GATEWAY)
+        authorization_url = data.get("authorization_url", "")
+        returned_reference = data.get("reference", "")
+        from urllib.parse import urlparse
+        parsed_url = urlparse(authorization_url)
+        if (
+            returned_reference != payment.reference
+            or parsed_url.scheme != "https"
+            or parsed_url.hostname != "checkout.paystack.com"
+        ):
+            return Response({"detail": "Paystack returned invalid checkout details."}, status=status.HTTP_502_BAD_GATEWAY)
+
+        PortalPayment.objects.filter(pk=payment.pk, status=PortalPayment.PENDING).update(
+            authorization_url=authorization_url
+        )
+        return Response({
+            "reference": payment.reference,
+            "authorization_url": authorization_url,
+            "amount_kobo": payment.amount_kobo,
+            "currency": payment.currency,
+        }, status=status.HTTP_201_CREATED)
+
+
+class PortalPaymentVerifyAPIView(APIView):
+    authentication_classes = [PortalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, reference):
+        if request.user.role != PortalIdentity.ROLE_STUDENT:
+            raise PermissionDenied("Student access only.")
+        secret = os.environ.get("PAYSTACK_SECRET_KEY", "").strip()
+        expected_domain = os.environ.get("PAYSTACK_EXPECTED_DOMAIN", "").strip().lower()
+        if not secret or expected_domain not in ("test", "live"):
+            return Response({"detail": "Online payment verification is not configured yet."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+        if (expected_domain == "test" and not secret.startswith("sk_test_")) or (
+            expected_domain == "live" and not secret.startswith("sk_live_")
+        ):
+            return Response({"detail": "Payment gateway environment configuration is invalid."}, status=status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        payment = PortalPayment.objects.filter(reference=reference, student=request.user).select_related("enrollment").first()
+        if not payment:
+            raise NotFound("Payment reference not found for this account.")
+        if payment.status == PortalPayment.SUCCESS:
+            return Response({
+                "reference": payment.reference,
+                "status": payment.status,
+                "enrollment_status": payment.enrollment.status,
+                "verified_at": payment.verified_at,
+            })
+        if payment.status != PortalPayment.PENDING:
+            raise PermissionDenied("This payment is no longer pending.")
+
+        try:
+            response = requests.get(
+                f"https://api.paystack.co/transaction/verify/{payment.reference}",
+                headers={"Authorization": f"Bearer {secret}"},
+                timeout=15,
+            )
+            payload = response.json()
+        except (requests.RequestException, ValueError):
+            return Response({"detail": "Paystack verification is temporarily unavailable."}, status=status.HTTP_502_BAD_GATEWAY)
+
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if response.status_code != 200 or not isinstance(data, dict) or payload.get("status") is not True:
+            return Response({"detail": "Paystack could not verify this payment."}, status=status.HTTP_502_BAD_GATEWAY)
+        if data.get("status") != "success":
+            return Response({"reference": payment.reference, "status": "pending", "confirmed": False}, status=status.HTTP_202_ACCEPTED)
+
+        if (
+            data.get("reference") != payment.reference
+            or data.get("amount") != payment.amount_kobo
+            or data.get("currency") != payment.currency
+            or data.get("domain") != expected_domain
+        ):
+            return Response({"detail": "Verified Paystack details do not match this payment."}, status=status.HTTP_400_BAD_REQUEST)
+
+        gateway_response = {
+            "status": data.get("status"),
+            "reference": data.get("reference"),
+            "amount": data.get("amount"),
+            "currency": data.get("currency"),
+            "domain": data.get("domain"),
+            "paid_at": data.get("paid_at"),
+            "channel": data.get("channel"),
+            "transaction_id": data.get("id"),
+        }
+        with transaction.atomic():
+            payment = PortalPayment.objects.select_for_update().select_related("enrollment", "enrollment__course").get(pk=payment.pk)
+            if payment.status == PortalPayment.SUCCESS:
+                return Response({
+                    "reference": payment.reference,
+                    "status": payment.status,
+                    "enrollment_status": payment.enrollment.status,
+                    "verified_at": payment.verified_at,
+                })
+            enrollment = PortalEnrollment.objects.select_for_update().get(pk=payment.enrollment_id)
+            current_amount = int((enrollment.course.fee_amount * Decimal("100")).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+            if (
+                enrollment.student_id != request.user.pk
+                or current_amount != payment.amount_kobo
+                or enrollment.course.fee_currency != payment.currency
+                or enrollment.status not in [PortalEnrollment.PENDING, PortalEnrollment.APPROVED, PortalEnrollment.COMPLETED]
+            ):
+                return Response({"detail": "The payment is verified, but the enrolment needs administrator reconciliation."}, status=status.HTTP_409_CONFLICT)
+            payment.status = PortalPayment.SUCCESS
+            payment.gateway_response = gateway_response
+            payment.verified_at = timezone.now()
+            payment.save(update_fields=["status", "gateway_response", "verified_at"])
+            if enrollment.status == PortalEnrollment.PENDING:
+                enrollment.status = PortalEnrollment.APPROVED
+                enrollment.save(update_fields=["status", "updated_at"])
+
+        return Response({
+            "reference": payment.reference,
+            "status": payment.status,
+            "enrollment_status": enrollment.status,
+            "verified_at": payment.verified_at,
+        })
