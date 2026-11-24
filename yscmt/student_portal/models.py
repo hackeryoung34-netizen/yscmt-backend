@@ -269,6 +269,7 @@ class PortalClassroomSession(models.Model):
     ends_at = models.DateTimeField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="scheduled")
     created_by = models.ForeignKey(PortalIdentity, related_name="classroom_sessions_created", null=True, blank=True, on_delete=models.PROTECT)
+    created_by_handle = models.CharField(max_length=255, blank=True, default="admin")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -297,7 +298,7 @@ class PortalClassroomMessage(models.Model):
     course = models.ForeignKey(PortalCourse, related_name="classroom_messages", on_delete=models.CASCADE)
     student = models.ForeignKey(PortalIdentity, related_name="classroom_messages", on_delete=models.CASCADE)
     author_role = models.CharField(max_length=20, choices=[("student", "Student"), ("instructor", "Instructor"), ("admin", "Admin")], default="student")
-    message = models.CharField(max_length=2000)
+    message = models.CharField(max_length=3000)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -312,6 +313,7 @@ class PortalClassroomAnnouncement(models.Model):
     body = models.TextField()
     published = models.BooleanField(default=True)
     created_by = models.ForeignKey(PortalIdentity, related_name="classroom_announcements_created", null=True, blank=True, on_delete=models.PROTECT)
+    created_by_handle = models.CharField(max_length=255, blank=True, default="admin")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -322,7 +324,8 @@ class PortalTeacherReply(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     course = models.ForeignKey(PortalCourse, related_name="teacher_replies", on_delete=models.CASCADE)
     created_by = models.ForeignKey(PortalIdentity, related_name="teacher_replies", null=True, blank=True, on_delete=models.PROTECT)
-    message = models.CharField(max_length=2000)
+    created_by_handle = models.CharField(max_length=255, blank=True, default="admin")
+    message = models.CharField(max_length=3000)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
