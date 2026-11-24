@@ -319,7 +319,7 @@ class StudentPortalAPITests(TestCase):
         self.assertEqual(response.status_code, 503)
         self.assertEqual(PortalPayment.objects.count(), 0)
 
-def test_payment_initialization_creates_secure_reference_for_new_intent(self):
+    def test_payment_initialization_creates_secure_reference_for_new_intent(self):
         self.course.fee_amount = Decimal("2500.00")
         self.course.fee_currency = "NGN"
         self.course.save()
@@ -347,7 +347,7 @@ def test_payment_initialization_creates_secure_reference_for_new_intent(self):
         self.assertEqual(response.data["amount_kobo"], 250000)
         self.assertEqual(PortalPayment.objects.filter(enrollment=enrollment).count(), 1)
 
-def test_certificate_requires_full_course_completion_and_passed_exam(self):
+    def test_certificate_requires_full_course_completion_and_passed_exam(self):
         exam, _, _ = self.make_exam()
         self.approve_student()
         denied_lessons = self.client.post(
