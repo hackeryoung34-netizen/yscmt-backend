@@ -96,3 +96,19 @@ class PortalExamSubmitSerializer(serializers.Serializer):
             except (ValueError, TypeError, AttributeError):
                 raise serializers.ValidationError("Every answer key must be a valid question UUID.")
         return normalized
+
+class PortalPracticeSubmitSerializer(serializers.Serializer):
+    lab_key = serializers.CharField(min_length=1, max_length=100)
+    title = serializers.CharField(min_length=1, max_length=200)
+    submission_text = serializers.CharField(required=False, allow_blank=True, max_length=5000)
+    project_url = serializers.CharField(required=False, allow_blank=True, max_length=2048)
+
+    def validate_project_url(self, value):
+        value = value.strip()
+        if value and not value.startswith("https://"):
+            raise serializers.ValidationError("Project links must use HTTPS.")
+        return value
+
+
+class PortalClassroomMessageSerializer(serializers.Serializer):
+    message = serializers.CharField(min_length=1, max_length=2000)
