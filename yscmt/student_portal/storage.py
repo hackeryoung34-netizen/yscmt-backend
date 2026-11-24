@@ -10,18 +10,40 @@ class ReceiptStorageError(Exception):
 
 
 def _client():
-    endpoint = os.environ.get("PORTAL_R2_ENDPOINT_URL", "").strip()
-    access_key = os.environ.get("PORTAL_R2_ACCESS_KEY_ID", "").strip()
-    secret_key = os.environ.get("PORTAL_R2_SECRET_ACCESS_KEY", "").strip()
-    bucket = os.environ.get("PORTAL_R2_BUCKET", "").strip()
-    if not all([endpoint, access_key, secret_key, bucket]):
-        raise ReceiptStorageError("Private R2 storage credentials are not configured.")
+    # Generic S3-compatible settings are preferred. Legacy R2 names remain
+    # supported so an existing preview configuration does not break.
+    endpoint = (
+        os.environ.get("PORTAL_STORAGE_ENDPOINT_URL")
+        or os.environ.get("PORTAL_R2_ENDPOINT_URL")
+        or ""
+    ).strip()
+    access_key = (
+        os.environ.get("PORTAL_STORAGE_ACCESS_KEY_ID")
+        or os.environ.get("PORTAL_R2_ACCESS_KEY_ID")
+        or ""
+    ).strip()
+    secret_key = (
+        os.environ.get("PORTAL_STORAGE_SECRET_ACCESS_KEY")
+        or os.environ.get("PORTAL_R2_SECRET_ACCESS_KEY")
+        or ""
+    ).strip()
+    bucket = (
+        os.environ.get("PORTAL_STORAGE_BUCKET")
+        or os.environ.get("PORTAL_R2_BUCKET")
+        or ""
+    ).strip()
+    region = (
+        os.environ.get("PORTAL_STORAGE_REGION")
+        or ("auto" if os.environ.get("PORTAL_R2_ENDPOINT_URL") else "us-east-1")
+    ).strip()
+    if not all([endpoint, access_key, secret_key, bucket, region]):
+        raise ReceiptStorageError("Private S3-compatible storage credentials are not configured.")
     client = boto3.client(
         "s3",
         endpoint_url=endpoint,
         aws_access_key_id=access_key,
         aws_secret_access_key=secret_key,
-        region_name="auto",
+        region_name=region,
         config=Config(signature_version="s3v4", connect_timeout=5, read_timeout=10, retries={"max_attempts": 2}),
     )
     return client, bucket
