@@ -172,6 +172,8 @@ class PortalMeAPIView(APIView):
             "avatar_url": user.avatar_url,
         })
 
+    post = patch
+
 
 class PortalCourseListAPIView(APIView):
     authentication_classes = [PortalJWTAuthentication]
@@ -207,9 +209,23 @@ class PortalCourseLessonsAPIView(APIView):
         enrolled = PortalEnrollment.objects.filter(student=request.user, course_id=course_id, status__in=[PortalEnrollment.APPROVED, PortalEnrollment.COMPLETED]).exists()
         if not enrolled:
             raise PermissionDenied("An approved enrolment is required to view lessons.")
-        lessons = PortalLesson.objects.filter(course_id=course_id, course__is_active=True, is_active=True)
-        from .serializers import PortalLessonSerializer
-        return Response({"results": PortalLessonSerializer(lessons, many=True).data})
+        progress_query = PortalLessonProgress.objects.filter(
+            student=request.user, lesson_id=models.OuterRef("pk")
+        ).values("completed_at")[:1]
+        lessons = PortalLesson.objects.filter(
+            course_id=course_id, course__is_active=True, is_active=True
+        ).annotate(completed_at=models.Subquery(progress_query)).order_by("sort_order", "created_at")
+        results = [{
+            "id": str(item.pk), "course_id": str(item.course_id),
+            "title": item.title, "content": item.content,
+            "video_url": item.video_url, "sort_order": item.sort_order,
+            "completed": item.completed_at is not None,
+            "completed_at": item.completed_at,
+        } for item in lessons]
+        completed = sum(1 for item in results if item["completed"])
+        progress = {"completed": completed, "total": len(results),
+                    "percent": round(completed * 100 / len(results)) if results else 0}
+        return Response({"lessons": results, "results": results, "progress": progress})
 
 
 class PortalEnrollmentCreateAPIView(APIView):
@@ -308,15 +324,24 @@ class PortalCourseExamsAPIView(APIView):
         ).exists()
         if not allowed:
             raise PermissionDenied("An approved enrolment is required to view exams.")
-        exams = PortalExam.objects.filter(course=course, is_active=True)
-        return Response({"results": [{
-            "id": str(exam.pk),
-            "title": exam.title,
+        latest_attempt = PortalExamAttempt.objects.filter(
+            exam_id=models.OuterRef("pk"), student=request.user
+        ).order_by("-submitted_at")
+        exams = PortalExam.objects.filter(course=course, is_active=True).annotate(
+            question_count=models.Count("questions"),
+            last_score=models.Subquery(latest_attempt.values("score")[:1]),
+            last_passed=models.Subquery(latest_attempt.values("passed")[:1]),
+        )
+        results = [{
+            "id": str(exam.pk), "title": exam.title,
             "instructions": exam.instructions,
             "duration_minutes": exam.duration_minutes,
             "pass_mark": exam.pass_mark,
-            "question_count": exam.questions.count(),
-        } for exam in exams]})
+            "question_count": exam.question_count,
+            "last_score": exam.last_score,
+            "last_passed": exam.last_passed,
+        } for exam in exams]
+        return Response({"exams": results, "results": results})
 
 
 class PortalExamStartAPIView(APIView):
