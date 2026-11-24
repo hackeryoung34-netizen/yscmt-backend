@@ -936,7 +936,7 @@ class PortalPracticeSubmissionAPIView(APIView):
         if request.user.role != PortalIdentity.ROLE_STUDENT:
             raise PermissionDenied("Student access only.")
         submissions = PortalPracticeSubmission.objects.filter(student=request.user)[:100]
-        return Response({"results": [{
+        return Response({"submissions": [{
             "id": str(item.pk),
             "lab_key": item.lab_key,
             "title": item.title,
@@ -1390,11 +1390,20 @@ class PortalAdminPracticeReviewAPIView(APIView):
     def get(self, request):
         if request.user.role != PortalIdentity.ROLE_ADMIN:
             raise PermissionDenied("Administrator access only.")
-        state = request.query_params.get("status", "submitted")
-        if state not in dict(PortalPracticeSubmission.STATUS_CHOICES):
+        state = request.query_params.get("status")
+        if state and state not in dict(PortalPracticeSubmission.STATUS_CHOICES):
             raise serializers.ValidationError({"status": "Invalid practice status."})
-        items = PortalPracticeSubmission.objects.filter(status=state).select_related("student")[:100]
-        return Response({"results": [{
+        items = PortalPracticeSubmission.objects.all()
+        if state:
+            items = items.filter(status=state)
+        items = items.select_related("student", "reviewed_by").order_by(
+            models.Case(
+                models.When(status="submitted", then=0),
+                models.When(status="in_review", then=1),
+                default=2, output_field=models.IntegerField(),
+            ), "-submitted_at"
+        )[:300]
+        return Response({"submissions": [{
             "id": str(item.pk),
             "student_id": str(item.student_id),
             "student_name": item.student.full_name or item.student.username,
@@ -1407,6 +1416,7 @@ class PortalAdminPracticeReviewAPIView(APIView):
             "reviewer_notes": item.reviewer_notes,
             "submitted_at": item.submitted_at,
             "reviewed_at": item.reviewed_at,
+            "reviewed_by": item.reviewed_by.username if item.reviewed_by else None,
         } for item in items]})
 
     def post(self, request, submission_id):
@@ -1414,8 +1424,8 @@ class PortalAdminPracticeReviewAPIView(APIView):
             raise PermissionDenied("Administrator access only.")
         new_status = request.data.get("status")
         notes = request.data.get("reviewer_notes", "")
-        if new_status not in ["reviewing", "approved", "rejected"]:
-            raise serializers.ValidationError({"status": "Choose reviewing, approved or rejected."})
+        if new_status not in ["in_review", "approved", "needs_changes"]:
+            raise serializers.ValidationError({"status": "Choose in_review, approved or needs_changes."})
         if not isinstance(notes, str) or len(notes) > 2000:
             raise serializers.ValidationError({"reviewer_notes": "Notes must be text up to 2000 characters."})
         with transaction.atomic():
@@ -1427,8 +1437,8 @@ class PortalAdminPracticeReviewAPIView(APIView):
             previous = item.status
             item.status = new_status
             item.reviewer_notes = notes.strip()
-            item.reviewed_at = timezone.now() if new_status in ["approved", "rejected"] else None
-            item.reviewed_by = request.user if new_status in ["approved", "rejected"] else None
+            item.reviewed_at = timezone.now()
+            item.reviewed_by = request.user
             item.save(update_fields=["status", "reviewer_notes", "reviewed_at", "reviewed_by"])
             PortalAuditLog.objects.create(
                 actor=request.user, action="practice.reviewed",
