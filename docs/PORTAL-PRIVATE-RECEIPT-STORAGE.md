@@ -24,11 +24,11 @@ Never commit credentials, put them in frontend environment variables, or paste s
 
 1. Authenticated student requests `POST /api/portal/v1/student/payment-submissions/upload/` with their pending `enrollment_id`, allowed MIME type and file name.
 2. Server checks enrolment ownership and the stored course fee, creates an `uploading` submission and returns a 5-minute presigned POST. Client must submit the returned fields and file directly to the private bucket.
-3. Client calls `POST /api/portal/v1/student/payment-submissions/{submission_id}/complete-upload/`. Server checks the object owner metadata, size (1–10 MiB), MIME type and PDF/JPEG/PNG file signature before marking it pending.
+3. Client calls `POST /api/portal/v1/student/payment-submissions/{submission_id}/complete-upload/`. Server checks the object owner metadata, size (1–5 MiB), MIME type and PDF/JPEG/PNG file signature before marking it pending.
 4. Student or admin obtains a short-lived private download URL from `GET /api/portal/v1/payment-submissions/{submission_id}/receipt/`. Student ownership is enforced; admins can inspect receipts for review.
 5. Admin approval rechecks the object and stored course amount/currency before approving the related pending enrolment.
 
-Accepted files: PDF, JPEG and PNG. Maximum size: 10 MiB. Presigned upload expiry: 5 minutes. Download link expiry: 2 minutes.
+Accepted files: PDF, JPEG and PNG. Maximum size: 5 MiB. Presigned upload expiry: 5 minutes. Download link expiry: 2 minutes.
 
 ## Current status
 
