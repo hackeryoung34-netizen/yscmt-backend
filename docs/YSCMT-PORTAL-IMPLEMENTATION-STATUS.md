@@ -51,10 +51,10 @@ A Django-native portal foundation exists under `yscmt/student_portal/`:
 
 ## CI verification
 
-- Private receipt upload/download code and migration `0009` passed full CI on run [45346716577](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45346716577).
+- Private receipt upload/download code and migration `0009` passed full CI on run [45346716577](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45346716577). Additional dedicated storage-helper tests were added in `student_portal/test_storage.py` and passed with the complete preview workflow on [45350714485](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45350714485).
 - Source-schema parity migration `0010` and API changes passed full CI on run [45346987425](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45346987425).
 - A subsequent Paystack list endpoint test exposed and fixed an incorrect ORM relation; the corrected run is [45347520533](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45347520533) and was still running when the status page was updated.
-- The dedicated preview CI run [45350021055](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45350021055) passed on commit `c0b53d396f9e55968134c8207eb3d0c138ab9411`. A further isolated storage-helper test suite was added in commit `c192e94dc497539567e7ca1381f58dd507edf543`; its preview CI is running and must pass before treating those new tests as verified.
+- The latest dedicated preview CI run [45350714485](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45350714485) passed on branch commit `b013bb2c51a9a40a506075de533efc6a02e038c3`. This includes the isolated storage-helper tests added in commit `c192e94dc497539567e7ca1381f58dd507edf543`.
 - Verified checks include rejection of missing `DATABASE_URL` and SQLite, Django system checks, migration-file consistency, all portal migrations against disposable PostgreSQL, and the complete Student Portal API test suite including the new instructor classroom tests.
 - The separate legacy workflow `portal-api-tests.yml` reports failure with zero jobs returned for this migration branch. Its configured branch filters target the legacy independent branch, so it is not the authoritative check for this new preview branch. The dedicated preview workflow is the required gate.
 
@@ -87,7 +87,7 @@ Keep Hatchable active as the production service and fallback. Do not perform pro
 - Verified the exact Neon development database tree using a read-only catalog inspection: database `yscmt_student_portal` currently contains only the `public` schema and no application tables. Neon has not received migrations or source records.
 - Private receipt-storage integration is implemented against Cloudflare R2 S3-compatible storage using short-lived presigned upload/download links, owner metadata, size/MIME/signature checks, and fail-closed behavior when credentials are absent. It is not operational until non-production R2 credentials and a private bucket are configured and tested.
 - CI run `45350021055` for branch commit `c0b53d396f9e55968134c8207eb3d0c138ab9411` completed successfully: PostgreSQL-only preview guard, Django checks, migration drift checks, migrations against disposable PostgreSQL, and Student Portal API tests.
-- A separate legacy `portal-api-tests.yml` workflow invocation for the same commit reported failure without returning job records; the dedicated Student Portal preview workflow above passed. This separate workflow still needs diagnosis/cleanup so the repository does not show a misleading duplicate failure.
+- The separate legacy `.github/workflows/portal-api-tests.yml` workflow continues to show a failed invocation with no job records returned by GitHub's jobs endpoint. The dedicated Student Portal preview workflow passes. The legacy workflow is not the authoritative Neon/Django preview check and still needs cleanup/diagnosis.
 - No real data has been exported/imported; no Render preview service has been created; Hatchable version 53 remains active; no production cutover or DNS changes have occurred.
 
 ### Remaining safe sequence
