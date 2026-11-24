@@ -17,6 +17,9 @@ A Django-native portal foundation exists under `yscmt/student_portal/`:
 - Certificate issuance requires approved/completed enrolment, completion of all active lessons and a passed exam; issuance is idempotent and certificates are verifiable.
 - Classroom sessions, attendance, student messages, announcements, teacher replies and practice submissions have student-side APIs with enrolment/ownership checks.
 - Admin dashboard counts and student directory are available only to database-authorized admins.
+- Admins can assign and unassign active instructors to active courses; each assignment is audited.
+- Instructors can list only courses assigned to them and see only approved/completed students within those assigned courses.
+- Instructor assignment model and migration `0007_course_instructor_assignment` have been added, with API permission tests.
 - Admin-only enrolment review (approve/reject/complete) and practice review APIs are implemented.
 - Enrolment completion is blocked unless every active lesson is complete and at least one course exam has been passed.
 - Admins cannot review their own enrolment. Completed enrolments cannot be downgraded.
@@ -36,7 +39,8 @@ A Django-native portal foundation exists under `yscmt/student_portal/`:
 ## CI verification
 
 - Dedicated Student Portal CI passed on commit `13772dc320ecaa4982bd0c7a7fbd61ed62d17631`, run [45344616905](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45344616905). It verified Django checks, migration drift, all migrations against disposable PostgreSQL 16, and API tests including enrollment-completion and self-review safeguards.
-- The dashboard, practice queue and route additions are being verified by [45344715017](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45344715017).
+- The dashboard, practice queue and route additions passed in [45344715017](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45344715017).
+- Instructor assignment, instructor course/student access, and practice self-review safeguards have been committed; latest dedicated workflow [45345301175](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45345301175) is still running/queued at the container initialization stage and has not yet verified these changes.
 - The PostgreSQL-only preview guard passed in [45344769918](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45344769918), including Django checks, migration drift, PostgreSQL 16 migrations and the full Student Portal API suite.
 - An additional CI gate now explicitly verifies that preview startup rejects both a missing `DATABASE_URL` and a SQLite URL; run [45344908675](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45344908675) is running for this stricter gate.
 - Earlier failures were traced to literal escaped line breaks in `urls.py` and an extra closing brace in migration `0006_portal_audit_log.py`; both have been corrected.
@@ -45,8 +49,8 @@ A Django-native portal foundation exists under `yscmt/student_portal/`:
 ## Remaining work before preview deployment
 
 - Verify the newest CI run including the dashboard and PostgreSQL-only guard.
-- Complete instructor-specific permissions and course assignment model after reconciling the source schema.
-- Implement bank-transfer/payment-submission review and secure upload/storage mapping; the current Django payment slice covers Paystack only.
+- Add instructor classroom session/announcement management and reconcile instructor permissions against the legacy application.
+- Implement bank-transfer/payment-submission review and secure upload/storage mapping; the current Django payment slice covers Paystack only. Do not accept arbitrary receipt storage keys before a private storage provider and ownership verification are implemented.
 - Review the full model/schema mapping against Supabase source migrations and Hatchable source records.
 - Add a safe, repeatable synthetic-data migration rehearsal and reconciliation report.
 - Review certificate asset handling and storage migration.
