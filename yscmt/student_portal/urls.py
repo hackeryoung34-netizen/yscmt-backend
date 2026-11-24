@@ -12,7 +12,7 @@ from .views import (
     PortalClassroomSessionListAPIView, PortalClassroomJoinAPIView,
     PortalClassroomMessageAPIView, PortalClassroomAnnouncementsAPIView,
     PortalTeacherRepliesAPIView, PortalPracticeSubmissionAPIView,
-    PortalAdminEnrollmentAPIView, PortalAdminPracticeReviewAPIView, PortalAdminAuditLogAPIView,
+    PortalAdminEnrollmentAPIView, PortalAdminPracticeReviewAPIView, PortalAdminAuditLogAPIView, PortalAdminPaymentSubmissionAPIView,
     PortalAdminOverviewAPIView, PortalAdminStudentListAPIView,
     PortalAdminCourseInstructorAPIView, PortalInstructorCoursesAPIView, PortalInstructorStudentListAPIView,
     PortalInstructorClassroomSessionAPIView, PortalInstructorAnnouncementAPIView, PortalInstructorTeacherReplyAPIView,
@@ -54,6 +54,8 @@ urlpatterns = [
     path("admin/students/", PortalAdminStudentListAPIView.as_view(), name="portal-admin-students"),
     path("admin/enrollments/", PortalAdminEnrollmentAPIView.as_view(), name="portal-admin-enrollments"),
     path("admin/enrollments/<uuid:enrollment_id>/review/", PortalAdminEnrollmentAPIView.as_view(), name="portal-admin-enrollment-review"),
+    path("admin/payment-submissions/", PortalAdminPaymentSubmissionAPIView.as_view(), name="portal-admin-payment-submissions"),
+    path("admin/payment-submissions/<uuid:submission_id>/review/", PortalAdminPaymentSubmissionAPIView.as_view(), name="portal-admin-payment-submission-review"),
     path("admin/practice/submissions/<uuid:submission_id>/review/", PortalAdminPracticeReviewAPIView.as_view(), name="portal-admin-practice-review"),
     path("admin/audit-logs/", PortalAdminAuditLogAPIView.as_view(), name="portal-admin-audit-logs"),
 ]
