@@ -949,3 +949,42 @@ class StudentPortalAPITests(TestCase):
         )
         self.assertEqual(joined.status_code, 200)
         self.assertTrue(PortalClassroomAttendance.objects.filter(session=session, student=self.student).exists())
+
+    def test_admin_can_manage_courses_lessons_and_draft_exams(self):
+        admin = PortalIdentity(username="contentadmin", email="contentadmin@example.test", role=PortalIdentity.ROLE_ADMIN)
+        admin.set_password("StrongPass!2026")
+        admin.save()
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('student1')}")
+        denied = self.client.post("/api/portal/v1/admin/courses/", {"title": "New course"}, format="json")
+        self.assertEqual(denied.status_code, 403)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('contentadmin')}")
+        created_course = self.client.post(
+            "/api/portal/v1/admin/courses/",
+            {"title": "New YSCMT Course", "description": "Course description", "level": "Beginner"},
+            format="json",
+        )
+        self.assertEqual(created_course.status_code, 201)
+        course_id = created_course.data["course"]["id"]
+        lesson = self.client.post(
+            "/api/portal/v1/admin/lessons/",
+            {"course_id": course_id, "title": "First lesson", "content": "Lesson body", "sort_order": 1},
+            format="json",
+        )
+        self.assertEqual(lesson.status_code, 201)
+        self.assertFalse(lesson.data["lesson"]["active"])
+        questions = [{
+            "question_text": f"Question {i}", "options": ["A", "B", "C", "D"], "correct_option": 0,
+        } for i in range(1, 3)]
+        exam = self.client.post(
+            "/api/portal/v1/admin/exams/",
+            {"course_id": course_id, "title": "Final exam", "duration_minutes": 30, "pass_mark": 50, "questions": questions},
+            format="json",
+        )
+        self.assertEqual(exam.status_code, 201)
+        exam_id = exam.data["exam"]["id"]
+        self.assertFalse(exam.data["exam"]["active"])
+        published = self.client.patch(
+            "/api/portal/v1/admin/exams/", {"exam_id": exam_id, "active": True}, format="json"
+        )
+        self.assertEqual(published.status_code, 200)
+        self.assertTrue(published.data["exam"]["active"])
