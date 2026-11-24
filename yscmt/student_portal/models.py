@@ -363,4 +363,7 @@ class PortalPaymentSubmission(models.Model):
     class Meta:
         ordering = ["-submitted_at"]
         indexes = [models.Index(fields=["status", "submitted_at"], name="portal_bank_status_idx")]
-        constraints = [models.CheckConstraint(condition=models.Q(amount__gte=0), name="portal_bank_amount_nonnegative")]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(amount__gte=0), name="portal_bank_amount_nonnegative"),
+            models.UniqueConstraint(fields=["enrollment"], condition=models.Q(status__in=["uploading", "pending"]), name="uniq_active_bank_payment_submission"),
+        ]
