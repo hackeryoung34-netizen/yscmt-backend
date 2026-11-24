@@ -14,6 +14,8 @@ A Django-native portal foundation exists under `yscmt/student_portal/`:
 - Timed exams, resumable sessions, student-scoped question delivery, server-side scoring, timeouts recorded as failed attempts, and one attempt per session.
 - Correct answer keys are never included in student question responses.
 - Paystack payment initialization uses the stored course fee, never a client-supplied amount. Server-side verification checks success, reference, amount, currency and expected test/live gateway domain before approving enrolment.
+- Bank-transfer receipt metadata model and migration `0008_portal_payment_submission` are implemented. Admin-only review validates enrolment/student/course ownership, stored fee and currency, pending status, and student-prefixed private object key before approval; decisions are audited.
+- Bank-transfer review queue is available at `GET /api/portal/v1/admin/payment-submissions/`; review uses `POST /api/portal/v1/admin/payment-submissions/{submission_id}/review/`. The admin overview includes pending bank submissions.
 - Certificate issuance requires approved/completed enrolment, completion of all active lessons and a passed exam; issuance is idempotent and certificates are verifiable.
 - Classroom sessions, attendance, student messages, announcements, teacher replies and practice submissions have student-side APIs with enrolment/ownership checks.
 - Admin dashboard counts and student directory are available only to database-authorized admins.
@@ -47,7 +49,7 @@ A Django-native portal foundation exists under `yscmt/student_portal/`:
 ## Remaining work before preview deployment
 
 - Reconcile instructor permissions and the full classroom workflow against all source behavior and the frontend contract.
-- Implement bank-transfer/payment-submission review and secure upload/storage mapping; the current Django payment slice covers Paystack only. Do not accept arbitrary receipt storage keys before a private storage provider and ownership verification are implemented.
+- Complete private receipt upload/download integration. The payment-submission model and admin review are ready, but no student receipt-upload endpoint is enabled because a private object-storage provider and its credentials have not been configured. Do not accept client-supplied storage keys; add server-issued, owner-bound upload authorization and private downloads only after storage setup.
 - Review the full model/schema mapping against Supabase source migrations and Hatchable source records.
 - Add a safe, repeatable synthetic-data migration rehearsal and reconciliation report.
 - Review certificate asset handling and storage migration.
