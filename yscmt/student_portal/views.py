@@ -980,7 +980,7 @@ class PortalAdminEnrollmentAPIView(APIView):
             "student_name": item.student.full_name or item.student.username,
             "student_email": item.student.email,
             "course_id": str(item.course_id),
-            "course_title": item.enrollment.course.title,
+            "course_title": item.course.title,
             "status": item.status,
             "created_at": item.created_at,
         } for item in records]})
@@ -1166,7 +1166,7 @@ class PortalAdminPaystackPaymentAPIView(APIView):
             "reference": item.reference,
             "student_email": item.student.email,
             "student_name": item.student.full_name or item.student.username,
-            "course_title": item.course.title,
+            "course_title": item.enrollment.course.title,
             "amount_kobo": item.amount_kobo,
             "currency": item.currency,
             "status": item.status,
