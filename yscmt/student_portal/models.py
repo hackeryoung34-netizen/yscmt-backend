@@ -386,7 +386,7 @@ class PortalLegacyUserMap(models.Model):
     ]
     source_system = models.CharField(max_length=50, default="hatchable")
     legacy_user_id = models.CharField(max_length=255)
-    identity = models.ForeignKey(PortalIdentity, related_name="legacy_user_mappings", on_delete=models.PROTECT)
+    identity = models.ForeignKey(PortalIdentity, db_column="auth_user_id", related_name="legacy_user_mappings", on_delete=models.PROTECT)
     migration_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
