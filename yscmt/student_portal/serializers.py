@@ -1,5 +1,6 @@
 from django.contrib.auth.password_validation import validate_password
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import PortalIdentity, PortalCourse, PortalLesson, PortalEnrollment
@@ -45,7 +46,7 @@ class PortalTokenSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         username = attrs["username"].strip()
-        identity = PortalIdentity.objects.filter(username__iexact=username, is_active=True).first()
+        identity = PortalIdentity.objects.filter(Q(username__iexact=username) | Q(email__iexact=username), is_active=True).first()
         if not identity or not identity.check_password(attrs["password"]):
             raise serializers.ValidationError({"detail": "Invalid username or password."})
         if identity.must_reset_password:
