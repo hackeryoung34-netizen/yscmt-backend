@@ -209,6 +209,10 @@ class StudentPortalAPITests(TestCase):
         enrollment = PortalEnrollment.objects.create(
             student=self.student, course=self.course, status=PortalEnrollment.PENDING
         )
+        PortalPayment.objects.create(
+            enrollment=enrollment, student=self.student,
+            reference="YSCMT_TEST_REFERENCE", amount_kobo=1500000, currency="NGN",
+        )
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('student1')}")
         gateway = Mock(status_code=200)
         gateway.json.return_value = {
