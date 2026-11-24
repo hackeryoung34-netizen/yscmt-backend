@@ -15,33 +15,40 @@ A Django-native portal foundation exists under `yscmt/student_portal/`:
 - Correct answer keys are never included in student question responses.
 - Paystack payment initialization uses the stored course fee, never a client-supplied amount. Server-side verification checks success, reference, amount, currency and expected test/live gateway domain before approving enrolment.
 - Certificate issuance requires approved/completed enrolment, completion of all active lessons and a passed exam; issuance is idempotent and certificates are verifiable.
-- Classroom sessions, attendance, messages, announcements, teacher replies and practice submissions have student-side APIs with enrolment/ownership checks.
-- Admin-only enrolment review (approve/reject) and practice review APIs have been added.
+- Classroom sessions, attendance, student messages, announcements, teacher replies and practice submissions have student-side APIs with enrolment/ownership checks.
+- Admin dashboard counts and student directory are available only to database-authorized admins.
+- Admin-only enrolment review (approve/reject/complete) and practice review APIs are implemented.
+- Enrolment completion is blocked unless every active lesson is complete and at least one course exam has been passed.
+- Admins cannot review their own enrolment. Completed enrolments cannot be downgraded.
 - Admin review actions create audit events; audit-log listing is admin-only.
-- Public registration cannot grant admin privileges; admin APIs check the database-backed role.
+- Preview setting `PORTAL_REQUIRE_POSTGRES=true` now fails closed if `DATABASE_URL` is missing or points to SQLite. The temporary SQLite fallback remains only for legacy/local initialization when the flag is not enabled.
 
-## Current admin routes
+## Admin API routes
 
+- `GET /api/portal/v1/admin/overview/`
+- `GET /api/portal/v1/admin/students/`
 - `GET /api/portal/v1/admin/enrollments/?status=pending`
 - `POST /api/portal/v1/admin/enrollments/{enrollment_id}/review/`
+- `GET /api/portal/v1/admin/practice/submissions/?status=submitted`
 - `POST /api/portal/v1/admin/practice/submissions/{submission_id}/review/`
 - `GET /api/portal/v1/admin/audit-logs/`
 
 ## CI verification
 
-- Previous dedicated Student Portal preview workflow passed on commit `f8d878792ce5a6740c55fe34fc43e450ec912587`, run [45343850546](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45343850546).
-- The new admin review/audit-log implementation adds migration `0006_portal_audit_log` and tests for role protection and audit creation.
-- CI for the latest changes is running: [45344202996](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45344202996). Do not treat the new admin changes as verified until it passes.
-- A separate legacy workflow `portal-api-tests.yml` continues to report failure with no jobs returned by the GitHub jobs endpoint. It is separate from the dedicated preview workflow and still needs diagnosis.
+- Dedicated Student Portal CI passed on commit `13772dc320ecaa4982bd0c7a7fbd61ed62d17631`, run [45344616905](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45344616905). It verified Django checks, migration drift, all migrations against disposable PostgreSQL 16, and API tests including enrollment-completion and self-review safeguards.
+- The dashboard, practice queue and route additions are being verified by [45344715017](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45344715017).
+- The PostgreSQL-only preview guard and CI flag are being verified by [45344769918](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45344769918).
+- Earlier failures were traced to literal escaped line breaks in `urls.py` and an extra closing brace in migration `0006_portal_audit_log.py`; both have been corrected.
+- The separate legacy workflow `portal-api-tests.yml` reports failure with zero jobs returned for this migration branch. Its configured branch filters target the legacy independent branch, so it is not the authoritative check for this new preview branch. The dedicated preview workflow is the required gate.
 
 ## Remaining work before preview deployment
 
-- Verify the latest admin migration and tests in CI.
+- Verify the newest CI run including the dashboard and PostgreSQL-only guard.
+- Complete instructor-specific permissions and course assignment model after reconciling the source schema.
+- Implement bank-transfer/payment-submission review and secure upload/storage mapping; the current Django payment slice covers Paystack only.
 - Review the full model/schema mapping against Supabase source migrations and Hatchable source records.
-- Add and test remaining administrative workflows, instructor permissions, and webhook reconciliation.
 - Add a safe, repeatable synthetic-data migration rehearsal and reconciliation report.
-- Add a deployment guard requiring a PostgreSQL `DATABASE_URL` for non-debug preview; do not allow the ephemeral SQLite fallback for student records.
-- Review upload/storage migration and certificate asset handling.
+- Review certificate asset handling and storage migration.
 - Only after these gates pass, consider a Free Render preview using the selected workspace and Neon development branch.
 
 ## Not yet done
