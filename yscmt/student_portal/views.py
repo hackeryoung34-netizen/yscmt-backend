@@ -872,21 +872,42 @@ class PortalAdminEnrollmentAPIView(APIView):
         if request.user.role != PortalIdentity.ROLE_ADMIN:
             raise PermissionDenied("Administrator access only.")
         new_status = request.data.get("status")
-        if new_status not in [PortalEnrollment.APPROVED, PortalEnrollment.REJECTED]:
-            raise serializers.ValidationError({"status": "Choose approved or rejected."})
+        note = request.data.get("note", "")
+        if new_status not in [PortalEnrollment.APPROVED, PortalEnrollment.REJECTED, PortalEnrollment.COMPLETED]:
+            raise serializers.ValidationError({"status": "Choose approved, rejected or completed."})
+        if not isinstance(note, str) or len(note) > 2000:
+            raise serializers.ValidationError({"note": "Note must be text up to 2000 characters."})
         with transaction.atomic():
             enrollment = PortalEnrollment.objects.select_for_update().select_related("student", "course").filter(pk=enrollment_id).first()
             if not enrollment:
                 raise NotFound("Enrolment not found.")
             previous = enrollment.status
+            if enrollment.student_id == request.user.pk:
+                raise PermissionDenied("An administrator cannot review their own enrolment.")
+            if previous == PortalEnrollment.COMPLETED and new_status != PortalEnrollment.COMPLETED:
+                raise serializers.ValidationError({"status": "A completed enrolment cannot be downgraded."})
             if previous in [PortalEnrollment.APPROVED, PortalEnrollment.COMPLETED] and new_status == PortalEnrollment.REJECTED:
                 raise serializers.ValidationError({"status": "An approved or completed enrolment cannot be rejected here."})
+            if new_status == PortalEnrollment.COMPLETED:
+                active_lessons = PortalLesson.objects.filter(course=enrollment.course, is_active=True)
+                total = active_lessons.count()
+                completed = PortalLessonProgress.objects.filter(
+                    student=enrollment.student, lesson__in=active_lessons,
+                    completed_at__isnull=False,
+                ).count()
+                passed_exam = PortalExamAttempt.objects.filter(
+                    student=enrollment.student, exam__course=enrollment.course, passed=True,
+                ).exists()
+                if total == 0 or completed != total or not passed_exam:
+                    raise serializers.ValidationError({
+                        "status": "Student must complete all active lessons and pass at least one course exam before completion."
+                    })
             enrollment.status = new_status
             enrollment.save(update_fields=["status", "updated_at"])
             PortalAuditLog.objects.create(
                 actor=request.user, action="enrollment.status_changed",
                 target_type="enrollment", target_id=str(enrollment.pk),
-                metadata={"from": previous, "to": new_status, "student_id": str(enrollment.student_id), "course_id": str(enrollment.course_id)},
+                metadata={"from": previous, "to": new_status, "note": note.strip(), "student_id": str(enrollment.student_id), "course_id": str(enrollment.course_id)},
             )
         return Response({"id": str(enrollment.pk), "status": enrollment.status})
 
