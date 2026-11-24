@@ -19,7 +19,7 @@ A Django-native portal foundation exists under `yscmt/student_portal/`:
 - Admin dashboard counts and student directory are available only to database-authorized admins.
 - Admins can assign and unassign active instructors to active courses; each assignment is audited.
 - Instructors can list only courses assigned to them and see only approved/completed students within those assigned courses.
-- Instructor assignment model and migration `0007_course_instructor_assignment` have been added, with API permission tests.
+- Instructor assignment model and migration `0007_course_instructor_assignment` have been added, with API permission tests. A URL import formatting issue was corrected in commit `c82058f0710544eb098dce638eb592c5628f3bfd`; the corrected code still needs a fresh CI pass.
 - Admin-only enrolment review (approve/reject/complete) and practice review APIs are implemented.
 - Enrolment completion is blocked unless every active lesson is complete and at least one course exam has been passed.
 - Admins cannot review their own enrolment. Completed enrolments cannot be downgraded.
