@@ -1303,8 +1303,8 @@ class PortalBankReceiptUploadAPIView(APIView):
         content_type = request.data.get("content_type")
         file_name = request.data.get("file_name")
         transfer_reference = request.data.get("transfer_reference", "")
-        if not isinstance(transfer_reference, str) or len(transfer_reference) > 120:
-            raise serializers.ValidationError({"transfer_reference": "Reference must be text up to 120 characters."})
+        if not isinstance(transfer_reference, str) or not transfer_reference.strip() or len(transfer_reference) > 120:
+            raise serializers.ValidationError({"transfer_reference": "Bank transfer reference is required (maximum 120 characters)."})
         if not isinstance(file_name, str) or not file_name.strip() or len(file_name) > 255:
             raise serializers.ValidationError({"file_name": "A filename up to 255 characters is required."})
         safe_name = file_name.replace("\\", "/").split("/")[-1].strip()
