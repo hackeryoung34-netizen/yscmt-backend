@@ -502,3 +502,34 @@ class StudentPortalAPITests(TestCase):
         self.assertEqual(self.client.get("/api/portal/v1/admin/enrollments/").status_code, 403)
         self.assertEqual(self.client.get("/api/portal/v1/admin/audit-logs/").status_code, 403)
 
+
+
+    def test_admin_cannot_mark_enrollment_completed_before_course_requirements(self):
+        enrollment = PortalEnrollment.objects.create(
+            student=self.student, course=self.course, status=PortalEnrollment.APPROVED
+        )
+        admin = PortalIdentity(username="completionadmin", email="completionadmin@example.test", role=PortalIdentity.ROLE_ADMIN)
+        admin.set_password("StrongPass!2026")
+        admin.save()
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('completionadmin')}")
+        response = self.client.post(
+            f"/api/portal/v1/admin/enrollments/{enrollment.pk}/review/",
+            {"status": "completed"}, format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        enrollment.refresh_from_db()
+        self.assertEqual(enrollment.status, PortalEnrollment.APPROVED)
+
+    def test_admin_cannot_review_own_enrollment(self):
+        admin = PortalIdentity(username="selfadmin", email="selfadmin@example.test", role=PortalIdentity.ROLE_ADMIN)
+        admin.set_password("StrongPass!2026")
+        admin.save()
+        enrollment = PortalEnrollment.objects.create(
+            student=admin, course=self.course, status=PortalEnrollment.PENDING
+        )
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('selfadmin')}")
+        response = self.client.post(
+            f"/api/portal/v1/admin/enrollments/{enrollment.pk}/review/",
+            {"status": "approved"}, format="json",
+        )
+        self.assertEqual(response.status_code, 403)
