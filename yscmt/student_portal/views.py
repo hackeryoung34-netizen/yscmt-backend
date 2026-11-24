@@ -1006,7 +1006,7 @@ class PortalInstructorClassroomSessionAPIView(APIView):
         item = PortalClassroomSession.objects.create(
             course=course, title=title.strip(), description=description.strip(),
             meeting_url=meeting_url, starts_at=starts_at, ends_at=ends_at,
-            status="scheduled", created_by=request.user,
+            status="scheduled", created_by=request.user, created_by_handle=request.user.username,
         )
         PortalAuditLog.objects.create(
             actor=request.user, action="classroom.session_created",
@@ -1039,7 +1039,7 @@ class PortalInstructorAnnouncementAPIView(APIView):
         if not isinstance(body, str) or not body.strip() or len(body) > 10000:
             raise serializers.ValidationError({"body": "Announcement text is required and must be at most 10000 characters."})
         item = PortalClassroomAnnouncement.objects.create(
-            course=course, title=title.strip(), body=body.strip(), published=True, created_by=request.user,
+            course=course, title=title.strip(), body=body.strip(), published=True, created_by=request.user, created_by_handle=request.user.username,
         )
         PortalAuditLog.objects.create(
             actor=request.user, action="classroom.announcement_published",
@@ -1066,10 +1066,10 @@ class PortalInstructorTeacherReplyAPIView(APIView):
         if not course:
             raise PermissionDenied("This active course is not assigned to your instructor account.")
         message = request.data.get("message")
-        if not isinstance(message, str) or not message.strip() or len(message) > 2000:
-            raise serializers.ValidationError({"message": "Reply must contain 1 to 2000 characters."})
+        if not isinstance(message, str) or not message.strip() or len(message) > 3000:
+            raise serializers.ValidationError({"message": "Reply must contain 1 to 3000 characters."})
         item = PortalTeacherReply.objects.create(
-            course=course, created_by=request.user, message=message.strip(),
+            course=course, created_by=request.user, created_by_handle=request.user.username, message=message.strip(),
         )
         PortalAuditLog.objects.create(
             actor=request.user, action="classroom.teacher_reply_created",
