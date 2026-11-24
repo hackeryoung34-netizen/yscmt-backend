@@ -1270,6 +1270,161 @@ class PortalBankReceiptAccessAPIView(APIView):
         return Response({"download_url": url, "expires_in": 120})
 
 
+class PortalAdminClassroomAPIView(APIView):
+    authentication_classes = [PortalJWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def _admin(self, request):
+        if request.user.role != PortalIdentity.ROLE_ADMIN:
+            raise PermissionDenied("Administrator access only.")
+
+    def get(self, request):
+        self._admin(request)
+        sessions = PortalClassroomSession.objects.select_related("course").annotate(
+            attendance_count=models.Count("attendance")
+        ).order_by("-starts_at")[:100]
+        announcements = PortalClassroomAnnouncement.objects.select_related("course").order_by("-created_at")[:100]
+        student_messages = PortalClassroomMessage.objects.select_related("course").order_by("-created_at")[:100]
+        teacher_replies = PortalTeacherReply.objects.select_related("course").order_by("-created_at")[:100]
+        messages = [{
+            "id": str(item.pk), "course_id": str(item.course_id),
+            "course_title": item.course.title, "author_role": item.author_role,
+            "message": item.message, "created_at": item.created_at,
+        } for item in student_messages]
+        messages += [{
+            "id": str(item.pk), "course_id": str(item.course_id),
+            "course_title": item.course.title, "author_role": "teacher",
+            "message": item.message, "created_at": item.created_at,
+        } for item in teacher_replies]
+        messages.sort(key=lambda item: item["created_at"], reverse=True)
+        return Response({
+            "sessions": [{
+                "id": str(item.pk), "course_id": str(item.course_id),
+                "course_title": item.course.title, "title": item.title,
+                "description": item.description, "meeting_url": item.meeting_url,
+                "starts_at": item.starts_at, "ends_at": item.ends_at,
+                "status": item.status, "created_at": item.created_at,
+                "attendance_count": item.attendance_count,
+                "created_by": item.created_by_handle,
+            } for item in sessions],
+            "announcements": [{
+                "id": str(item.pk), "course_id": str(item.course_id) if item.course_id else None,
+                "course_title": item.course.title if item.course else None,
+                "title": item.title, "body": item.body, "published": item.published,
+                "created_at": item.created_at, "created_by": item.created_by_handle,
+            } for item in announcements],
+            "messages": messages[:100],
+        })
+
+    def post(self, request):
+        self._admin(request)
+        action = request.data.get("action")
+        if action == "create_session":
+            course_id = request.data.get("course_id")
+            title = request.data.get("title")
+            description = request.data.get("description", "")
+            meeting_url = request.data.get("meeting_url")
+            if not isinstance(title, str) or not title.strip() or len(title) > 180:
+                raise serializers.ValidationError({"title": "Session title is required (maximum 180 characters)."})
+            if not isinstance(description, str) or len(description) > 3000:
+                raise serializers.ValidationError({"description": "Description must be text up to 3000 characters."})
+            if not isinstance(meeting_url, str) or not meeting_url.startswith("https://"):
+                raise serializers.ValidationError({"meeting_url": "Meeting links must use HTTPS."})
+            course = PortalCourse.objects.filter(pk=course_id, is_active=True).first()
+            if not course:
+                raise NotFound("Active course not found.")
+            try:
+                starts_at = serializers.DateTimeField().run_validation(request.data.get("starts_at"))
+                ends_at = serializers.DateTimeField().run_validation(request.data.get("ends_at"))
+            except serializers.ValidationError:
+                raise serializers.ValidationError({"starts_at": "Provide valid session start and end timestamps."})
+            if ends_at <= starts_at:
+                raise serializers.ValidationError({"ends_at": "Session end must be after its start."})
+            item = PortalClassroomSession.objects.create(
+                course=course, title=title.strip(), description=description.strip(),
+                meeting_url=meeting_url, starts_at=starts_at, ends_at=ends_at,
+                status="scheduled", created_by=request.user,
+                created_by_handle=request.user.username,
+            )
+            PortalAuditLog.objects.create(
+                actor=request.user, action="classroom_session_created",
+                target_type="classroom_session", target_id=str(item.pk),
+                metadata={"course_id": str(course.pk), "title": item.title},
+            )
+            return Response({"session": {
+                "id": str(item.pk), "course_id": str(course.pk), "title": item.title,
+                "description": item.description, "meeting_url": item.meeting_url,
+                "starts_at": item.starts_at, "ends_at": item.ends_at, "status": item.status,
+            }}, status=status.HTTP_201_CREATED)
+        if action == "create_announcement":
+            course_id = request.data.get("course_id")
+            course = None
+            if course_id:
+                course = PortalCourse.objects.filter(pk=course_id).first()
+                if not course:
+                    raise NotFound("Course not found.")
+            title, body = request.data.get("title"), request.data.get("body")
+            if not isinstance(title, str) or not title.strip() or len(title) > 180:
+                raise serializers.ValidationError({"title": "Announcement title is required (maximum 180 characters)."})
+            if not isinstance(body, str) or not body.strip() or len(body) > 5000:
+                raise serializers.ValidationError({"body": "Announcement text is required (maximum 5000 characters)."})
+            item = PortalClassroomAnnouncement.objects.create(
+                course=course, title=title.strip(), body=body.strip(),
+                published=True, created_by=request.user, created_by_handle=request.user.username,
+            )
+            PortalAuditLog.objects.create(
+                actor=request.user, action="classroom_announcement_created",
+                target_type="classroom_announcement", target_id=str(item.pk),
+                metadata={"course_id": str(course.pk) if course else None, "title": item.title},
+            )
+            return Response({"announcement": {
+                "id": str(item.pk), "course_id": str(course.pk) if course else None,
+                "title": item.title, "body": item.body, "published": item.published,
+            }}, status=status.HTTP_201_CREATED)
+        if action == "reply":
+            course = PortalCourse.objects.filter(pk=request.data.get("course_id")).first()
+            message = request.data.get("message")
+            if not course:
+                raise NotFound("Course not found.")
+            if not isinstance(message, str) or not message.strip() or len(message) > 3000:
+                raise serializers.ValidationError({"message": "Reply must contain 1 to 3000 characters."})
+            item = PortalTeacherReply.objects.create(
+                course=course, created_by=request.user,
+                created_by_handle=request.user.username, message=message.strip(),
+            )
+            PortalAuditLog.objects.create(
+                actor=request.user, action="classroom_teacher_reply_created",
+                target_type="teacher_reply", target_id=str(item.pk),
+                metadata={"course_id": str(course.pk)},
+            )
+            return Response({"message": {
+                "id": str(item.pk), "course_id": str(course.pk),
+                "message": item.message, "author_role": "teacher",
+                "created_at": item.created_at,
+            }}, status=status.HTTP_201_CREATED)
+        raise serializers.ValidationError({"action": "Unknown classroom action."})
+
+    def patch(self, request):
+        self._admin(request)
+        session_id = request.data.get("session_id")
+        new_status = request.data.get("status")
+        if new_status not in dict(PortalClassroomSession.STATUS_CHOICES):
+            raise serializers.ValidationError({"status": "Choose a valid classroom session status."})
+        with transaction.atomic():
+            item = PortalClassroomSession.objects.select_for_update().filter(pk=session_id).first()
+            if not item:
+                raise NotFound("Class session not found.")
+            previous = item.status
+            item.status = new_status
+            item.save(update_fields=["status", "updated_at"])
+            PortalAuditLog.objects.create(
+                actor=request.user, action="classroom_session_status_changed",
+                target_type="classroom_session", target_id=str(item.pk),
+                metadata={"from": previous, "to": new_status},
+            )
+        return Response({"session": {"id": str(item.pk), "status": item.status}})
+
+
 class PortalAdminPaystackPaymentAPIView(APIView):
     authentication_classes = [PortalJWTAuthentication]
     permission_classes = [IsAuthenticated]
