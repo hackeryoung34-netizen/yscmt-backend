@@ -887,7 +887,7 @@ class PortalInstructorClassroomSessionAPIView(APIView):
         item = PortalClassroomSession.objects.create(
             course=course, title=title.strip(), description=description.strip(),
             meeting_url=meeting_url, starts_at=starts_at, ends_at=ends_at,
-            status="scheduled",
+            status="scheduled", created_by=request.user,
         )
         PortalAuditLog.objects.create(
             actor=request.user, action="classroom.session_created",
@@ -920,7 +920,7 @@ class PortalInstructorAnnouncementAPIView(APIView):
         if not isinstance(body, str) or not body.strip() or len(body) > 10000:
             raise serializers.ValidationError({"body": "Announcement text is required and must be at most 10000 characters."})
         item = PortalClassroomAnnouncement.objects.create(
-            course=course, title=title.strip(), body=body.strip(), published=True,
+            course=course, title=title.strip(), body=body.strip(), published=True, created_by=request.user,
         )
         PortalAuditLog.objects.create(
             actor=request.user, action="classroom.announcement_published",
@@ -1280,7 +1280,8 @@ class PortalAdminPracticeReviewAPIView(APIView):
             item.status = new_status
             item.reviewer_notes = notes.strip()
             item.reviewed_at = timezone.now() if new_status in ["approved", "rejected"] else None
-            item.save(update_fields=["status", "reviewer_notes", "reviewed_at"])
+            item.reviewed_by = request.user if new_status in ["approved", "rejected"] else None
+            item.save(update_fields=["status", "reviewer_notes", "reviewed_at", "reviewed_by"])
             PortalAuditLog.objects.create(
                 actor=request.user, action="practice.reviewed",
                 target_type="practice_submission", target_id=str(item.pk),
@@ -1300,7 +1301,7 @@ class PortalAdminAuditLogAPIView(APIView):
         return Response({"results": [{
             "id": str(item.pk),
             "actor_id": str(item.actor_id),
-            "actor_username": item.actor.username,
+            "actor_username": item.actor.username if item.actor else item.actor_handle,
             "action": item.action,
             "target_type": item.target_type,
             "target_id": item.target_id,
