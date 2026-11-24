@@ -297,13 +297,13 @@ class PortalClassroomMessage(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     course = models.ForeignKey(PortalCourse, related_name="classroom_messages", on_delete=models.CASCADE)
     student = models.ForeignKey(PortalIdentity, related_name="classroom_messages", on_delete=models.CASCADE)
-    author_role = models.CharField(max_length=20, choices=[("student", "Student"), ("instructor", "Instructor"), ("admin", "Admin")], default="student")
+    author_role = models.CharField(max_length=20, choices=[("student", "Student"), ("teacher", "Teacher")], default="student")
     message = models.CharField(max_length=3000)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["created_at"]
-        constraints = [models.CheckConstraint(condition=models.Q(author_role__in=["student", "instructor", "admin"]), name="portal_classroom_author_role_valid")]
+        constraints = [models.CheckConstraint(condition=models.Q(author_role__in=["student", "teacher"]), name="portal_classroom_author_role_valid")]
 
 
 class PortalClassroomAnnouncement(models.Model):
