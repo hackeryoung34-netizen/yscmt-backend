@@ -6,7 +6,7 @@ Branch: `migration/neon-django-preview`
 
 A Django-native portal foundation exists under `yscmt/student_portal/`:
 
-- UUID-based portal identity, independent of legacy Django `auth.User`, with Django password hashing.
+- UUID-based portal identity, independent of legacy Django `auth.User`, with Django password hashing. Supabase Auth bcrypt hashes can be verified on first login and upgraded in place to Django's current password hash.
 - Public registration always creates a student; clients cannot self-assign instructor/admin roles.
 - Portal JWT access/refresh; each request resolves identity and trusted role from the database.
 - Active course catalogue, course details, enrolment, lesson access gating and progress tracking.
@@ -15,9 +15,13 @@ A Django-native portal foundation exists under `yscmt/student_portal/`:
 - Correct answer keys are never included in student question responses.
 - Paystack payment initialization uses the stored course fee, never a client-supplied amount. Server-side verification checks success, reference, amount, currency and expected test/live gateway domain before approving enrolment.
 - Bank-transfer receipt metadata model and migrations `0008_portal_payment_submission` and `0009_receipt_upload_state` are implemented. A unique constraint permits only one uploading/pending receipt per enrolment.
+- Source schema alignment migration `0010` preserves course title uniqueness/defaults, lesson defaults/update timestamp, classroom creator fields, practice reviewer, nullable legacy teacher-reply creator, and audit actor/handle/nullable target. Audit rows have a `legacy_id` field for source ID reconciliation.
+- Migration `0011` adds `avatar_url`, maps `private.legacy_user_map` into the private PostgreSQL schema with source-system/user uniqueness and migration status, and maps `private.site_settings` into the private schema. These private tables have no student-facing routes.
 - Private receipt upload uses a server-issued, 5-minute S3-compatible presigned POST for Cloudflare R2. The object key is generated server-side under the student's UUID prefix; the POST policy pins content type, owner metadata and a 10 MB maximum. A separate finalize API verifies object ownership metadata, size, content type and PDF/JPEG/PNG file signature before the receipt enters the admin queue.
 - Student/admin receipt access uses 2-minute presigned GET links; students can access only their own receipts. Admin approval re-checks the private object before approving the related pending enrolment. All upload/review actions are audited.
 - Bank-transfer routes: `POST /api/portal/v1/student/payment-submissions/upload/`, `POST /api/portal/v1/student/payment-submissions/{submission_id}/complete-upload/`, `GET /api/portal/v1/payment-submissions/{submission_id}/receipt/`, `GET /api/portal/v1/admin/payment-submissions/`, and `POST /api/portal/v1/admin/payment-submissions/{submission_id}/review/`. The admin overview includes pending bank submissions.
+- Admin Paystack history is available at `GET /api/portal/v1/admin/paystack-payments/`; dashboard bank payment count matches the source RPC field `pending_bank_payments_count`.
+- Student profile read/update is self-scoped at `GET/PATCH /api/portal/v1/me/`; the patch accepts name, phone and HTTPS avatar URL only, never role changes.
 - R2 credentials are read only from environment variables: `PORTAL_R2_ENDPOINT_URL`, `PORTAL_R2_ACCESS_KEY_ID`, `PORTAL_R2_SECRET_ACCESS_KEY`, and `PORTAL_R2_BUCKET`. Missing credentials fail closed with HTTP 503; no public bucket URLs are used.
 - Certificate issuance requires approved/completed enrolment, completion of all active lessons and a passed exam; issuance is idempotent and certificates are verifiable.
 - Classroom sessions, attendance, student messages, announcements, teacher replies and practice submissions have student-side APIs with enrolment/ownership checks.
@@ -45,8 +49,10 @@ A Django-native portal foundation exists under `yscmt/student_portal/`:
 
 ## CI verification
 
-- The private receipt storage implementation and migration `0009` are under a fresh full CI run [45346716577](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45346716577); do not mark this implementation CI-verified until the run concludes successfully.
-- Dedicated Student Portal preview workflow passed on commit `2be2954c45ea6bff80f55aad4f74c1fa4c7894d4`, run [45346220160](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45346220160).
+- Private receipt upload/download code and migration `0009` passed full CI on run [45346716577](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45346716577).
+- Source-schema parity migration `0010` and API changes passed full CI on run [45346987425](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45346987425).
+- A subsequent Paystack list endpoint test exposed and fixed an incorrect ORM relation; the corrected run is [45347520533](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45347520533) and was still running when the status page was updated.
+- The newest CI run covering legacy bcrypt password upgrade, private user mapping and site settings is [45347626753](https://github.com/hackeryoung34-netizen/yscmt-backend/actions/runs/45347626753); do not claim these newest changes passed until it completes.
 - Verified checks include rejection of missing `DATABASE_URL` and SQLite, Django system checks, migration-file consistency, all portal migrations against disposable PostgreSQL, and the complete Student Portal API test suite including the new instructor classroom tests.
 - The separate legacy workflow `portal-api-tests.yml` reports failure with zero jobs returned for this migration branch. Its configured branch filters target the legacy independent branch, so it is not the authoritative check for this new preview branch. The dedicated preview workflow is the required gate.
 
@@ -54,14 +60,14 @@ A Django-native portal foundation exists under `yscmt/student_portal/`:
 
 - Reconcile instructor permissions and the full classroom workflow against all source behavior and the frontend contract.
 - Configure a private Cloudflare R2 bucket and its restricted CORS policy for the approved preview frontend, then add R2 secrets only to the preview service environment. No bucket has been created/configured and no R2 credentials are present in this repository or chat; receipt upload therefore returns HTTP 503 until the owner configures these secrets.
-- Review the full model/schema mapping against Supabase source migrations and Hatchable source records.
+- Finish a field-by-field schema and Hatchable data reconciliation, including source account/profile mapping and password-hash coverage. The source user mapping/settings tables are now represented, but no source records have been copied.
 - Add a safe, repeatable synthetic-data migration rehearsal and reconciliation report.
 - Review certificate asset handling and storage migration.
 - Only after these gates pass, consider a Free Render preview using the selected workspace and Neon development branch.
 
 ## Not yet done
 
-- No migration has been run against Neon.
+- No migration has been run against Neon; migrations so far were applied only to disposable PostgreSQL 16 in CI.
 - No real student records, password hashes, payment data, receipts or certificates have been copied.
 - No Render service has been created.
 - No production frontend, Vercel settings, DNS or Hatchable settings have been changed.
