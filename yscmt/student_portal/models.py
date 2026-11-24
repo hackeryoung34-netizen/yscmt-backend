@@ -397,6 +397,7 @@ class PortalLegacyUserMap(models.Model):
             models.UniqueConstraint(fields=["source_system", "identity"], name="uniq_portal_legacy_source_identity"),
         ]
         indexes = [models.Index(fields=["identity"], name="portal_legacy_identity_idx")]
+        db_table = '"private"."legacy_user_map"'
 
 
 class PortalSiteSetting(models.Model):
@@ -405,4 +406,4 @@ class PortalSiteSetting(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = "student_portal_site_settings"
+        db_table = '"private"."site_settings"'
