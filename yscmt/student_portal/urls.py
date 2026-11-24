@@ -7,6 +7,8 @@ from .views import (
     PortalCourseExamsAPIView, PortalExamStartAPIView,
     PortalExamQuestionsAPIView, PortalExamSubmitAPIView,
     PortalPaymentInitializeAPIView, PortalPaymentVerifyAPIView,
+    PortalCertificateRequestAPIView, PortalCertificateListAPIView,
+    PortalCertificateVerifyAPIView,
 )
 
 urlpatterns = [
@@ -25,4 +27,7 @@ urlpatterns = [
     path("exam-sessions/<uuid:session_id>/submit/", PortalExamSubmitAPIView.as_view(), name="portal-exam-submit"),
     path("enrollments/<uuid:enrollment_id>/payments/initialize/", PortalPaymentInitializeAPIView.as_view(), name="portal-payment-initialize"),
     path("payments/<str:reference>/verify/", PortalPaymentVerifyAPIView.as_view(), name="portal-payment-verify"),
+    path("courses/<uuid:course_id>/certificates/request/", PortalCertificateRequestAPIView.as_view(), name="portal-certificate-request"),
+    path("certificates/", PortalCertificateListAPIView.as_view(), name="portal-certificate-list"),
+    path("certificates/verify/<str:certificate_code>/", PortalCertificateVerifyAPIView.as_view(), name="portal-certificate-verify"),
 ]
