@@ -11,7 +11,7 @@ from .views import (
     PortalCertificateVerifyAPIView,
     PortalClassroomSessionListAPIView, PortalClassroomJoinAPIView,
     PortalClassroomMessageAPIView, PortalClassroomAnnouncementsAPIView,
-    PortalTeacherRepliesAPIView, PortalPracticeSubmissionAPIView,
+    PortalTeacherRepliesAPIView, PortalPracticeSubmissionAPIView,\n    PortalAdminEnrollmentAPIView, PortalAdminPracticeReviewAPIView, PortalAdminAuditLogAPIView,
 )
 
 urlpatterns = [
@@ -38,5 +38,5 @@ urlpatterns = [
     path("courses/<uuid:course_id>/classroom/messages/", PortalClassroomMessageAPIView.as_view(), name="portal-classroom-messages"),
     path("courses/<uuid:course_id>/classroom/announcements/", PortalClassroomAnnouncementsAPIView.as_view(), name="portal-classroom-announcements"),
     path("courses/<uuid:course_id>/classroom/teacher-replies/", PortalTeacherRepliesAPIView.as_view(), name="portal-teacher-replies"),
-    path("practice/submissions/", PortalPracticeSubmissionAPIView.as_view(), name="portal-practice-submissions"),
+    path("practice/submissions/", PortalPracticeSubmissionAPIView.as_view(), name="portal-practice-submissions"),\n    path("admin/enrollments/", PortalAdminEnrollmentAPIView.as_view(), name="portal-admin-enrollments"),\n    path("admin/enrollments/<uuid:enrollment_id>/review/", PortalAdminEnrollmentAPIView.as_view(), name="portal-admin-enrollment-review"),\n    path("admin/practice/submissions/<uuid:submission_id>/review/", PortalAdminPracticeReviewAPIView.as_view(), name="portal-admin-practice-review"),\n    path("admin/audit-logs/", PortalAdminAuditLogAPIView.as_view(), name="portal-admin-audit-logs"),
 ]
