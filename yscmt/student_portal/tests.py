@@ -669,10 +669,11 @@ class StudentPortalAPITests(TestCase):
         queue = self.client.get("/api/portal/v1/admin/payment-submissions/")
         self.assertEqual(queue.status_code, 200)
         self.assertEqual(queue.data["results"][0]["id"], str(submission.pk))
-        response = self.client.post(
-            f"/api/portal/v1/admin/payment-submissions/{submission.pk}/review/",
-            {"status": "approved", "admin_note": "Verified against bank statement."}, format="json",
-        )
+        with patch("student_portal.views.verify_uploaded_receipt", return_value={"ContentLength": 1200, "ContentType": "application/pdf"}):
+            response = self.client.post(
+                f"/api/portal/v1/admin/payment-submissions/{submission.pk}/review/",
+                {"status": "approved", "admin_note": "Verified against bank statement."}, format="json",
+            )
         self.assertEqual(response.status_code, 200)
         enrollment.refresh_from_db()
         submission.refresh_from_db()
@@ -708,3 +709,48 @@ class StudentPortalAPITests(TestCase):
         self.assertEqual(mismatch.status_code, 400)
         enrollment.refresh_from_db()
         self.assertEqual(enrollment.status, PortalEnrollment.PENDING)
+
+    @patch("student_portal.views.generate_receipt_upload_form")
+    def test_student_receipt_upload_is_server_owned_and_requires_finalize(self, upload_mock):
+        upload_mock.return_value = {"url": "https://storage.example.test/bucket", "fields": {"key": "opaque"}}
+        self.course.fee_amount = Decimal("15000.00")
+        self.course.fee_currency = "NGN"
+        self.course.save()
+        enrollment = PortalEnrollment.objects.create(student=self.student, course=self.course, status=PortalEnrollment.PENDING)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('student1')}")
+        response = self.client.post(
+            "/api/portal/v1/student/payment-submissions/upload/",
+            {"enrollment_id": str(enrollment.pk), "content_type": "application/pdf", "file_name": "../../receipt.pdf", "transfer_reference": "BANK-REF"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        submission = PortalPaymentSubmission.objects.get(pk=response.data["submission_id"])
+        self.assertTrue(submission.storage_key.startswith(f"{self.student.pk}/receipts/"))
+        self.assertEqual(submission.file_name, "receipt.pdf")
+        self.assertEqual(submission.status, PortalPaymentSubmission.UPLOADING)
+        self.assertEqual(submission.amount, Decimal("15000.00"))
+        upload_mock.assert_called_once()
+
+    @patch("student_portal.views.verify_uploaded_receipt")
+    def test_student_can_finalize_only_their_own_verified_receipt(self, verify_mock):
+        self.course.fee_amount = Decimal("15000.00")
+        self.course.fee_currency = "NGN"
+        self.course.save()
+        enrollment = PortalEnrollment.objects.create(student=self.student, course=self.course, status=PortalEnrollment.PENDING)
+        submission = PortalPaymentSubmission.objects.create(
+            enrollment=enrollment, student=self.student, course=self.course,
+            amount=Decimal("15000.00"), currency="NGN",
+            storage_key=f"{self.student.pk}/receipts/upload-001.pdf",
+            content_type="application/pdf", file_name="receipt.pdf",
+            status=PortalPaymentSubmission.UPLOADING,
+            upload_expires_at=timezone.now() + timedelta(minutes=4),
+        )
+        verify_mock.return_value = {"ContentLength": 1024, "ContentType": "application/pdf"}
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('student1')}")
+        response = self.client.post(
+            f"/api/portal/v1/student/payment-submissions/{submission.pk}/complete-upload/", {}, format="json"
+        )
+        self.assertEqual(response.status_code, 200)
+        submission.refresh_from_db()
+        self.assertEqual(submission.status, PortalPaymentSubmission.PENDING)
+        verify_mock.assert_called_once()
