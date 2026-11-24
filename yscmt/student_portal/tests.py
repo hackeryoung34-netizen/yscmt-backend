@@ -786,3 +786,17 @@ class StudentPortalAPITests(TestCase):
         response = self.client.get("/api/portal/v1/admin/paystack-payments/")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["results"][0]["id"], str(payment.pk))
+
+    def test_student_can_update_own_profile_without_changing_role(self):
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.token_for('student1')}")
+        response = self.client.patch(
+            "/api/portal/v1/me/",
+            {"full_name": "Student One", "phone": "+2348000000000", "avatar_url": "https://cdn.example.test/avatar.png", "role": "admin"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.student.refresh_from_db()
+        self.assertEqual(self.student.full_name, "Student One")
+        self.assertEqual(self.student.phone, "+2348000000000")
+        self.assertEqual(self.student.avatar_url, "https://cdn.example.test/avatar.png")
+        self.assertEqual(self.student.role, PortalIdentity.ROLE_STUDENT)
