@@ -14,7 +14,8 @@ from .views import (
     PortalTeacherRepliesAPIView, PortalPracticeSubmissionAPIView,
     PortalAdminEnrollmentAPIView, PortalAdminPracticeReviewAPIView, PortalAdminAuditLogAPIView,
     PortalAdminOverviewAPIView, PortalAdminStudentListAPIView,
-    PortalAdminCourseInstructorAPIView, PortalInstructorCoursesAPIView, PortalInstructorStudentListAPIView,\n    PortalInstructorClassroomSessionAPIView, PortalInstructorAnnouncementAPIView, PortalInstructorTeacherReplyAPIView,
+    PortalAdminCourseInstructorAPIView, PortalInstructorCoursesAPIView, PortalInstructorStudentListAPIView,
+    PortalInstructorClassroomSessionAPIView, PortalInstructorAnnouncementAPIView, PortalInstructorTeacherReplyAPIView,
 )
 
 urlpatterns = [
