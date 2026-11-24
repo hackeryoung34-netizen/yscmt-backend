@@ -32,6 +32,19 @@ class PortalIdentity(models.Model):
         self.password = make_password(raw_password)
 
     def check_password(self, raw_password):
+        # Supabase Auth stores bcrypt hashes as raw $2a$/$2b$/$2y$ strings.
+        # Verify those legacy hashes once, then upgrade in place to Django's
+        # configured password hasher after a successful login.
+        if self.password.startswith(("$2a$", "$2b$", "$2y$")):
+            try:
+                import bcrypt
+                valid = bcrypt.checkpw(raw_password.encode("utf-8"), self.password.encode("utf-8"))
+            except (ImportError, ValueError, TypeError):
+                return False
+            if valid:
+                self.password = make_password(raw_password)
+                self.save(update_fields=["password", "updated_at"])
+            return valid
         return check_password(raw_password, self.password)
 
     def __str__(self):
