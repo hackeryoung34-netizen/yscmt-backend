@@ -79,3 +79,23 @@ A Django-native portal foundation exists under `yscmt/student_portal/`:
 ## Deployment gate and safety
 
 Keep Hatchable active as the production service and fallback. Do not perform production cutover, disable Hatchable, change production DNS/Vercel configuration, or import real student data without explicit approval and a verified backup/mapping. Use synthetic data for preview tests. Do not introduce paid services or upgrades without explicit approval.
+
+## Latest migration work — 2026-11-24
+
+- Added `docs/YSCMT-HATCHABLE-NEON-DJANGO-FIELD-MAPPING.md`: all 21 live Hatchable source tables are mapped to their Django target models, including field transformations, foreign-key mapping, identity reset rules, payment/receipt handling, and exam attempt/session reconciliation.
+- Rechecked Hatchable with read-only aggregate queries. Current snapshot: 5 users, 4 courses, 16 lessons, 4 exams, 40 questions, 20 audit logs and 1 site-setting row; all other listed portal tables are empty. No user names, emails, setting values, audit details, payment details or file contents were exported.
+- Verified the exact Neon development database tree using a read-only catalog inspection: database `yscmt_student_portal` currently contains only the `public` schema and no application tables. Neon has not received migrations or source records.
+- Private receipt-storage integration is implemented against Cloudflare R2 S3-compatible storage using short-lived presigned upload/download links, owner metadata, size/MIME/signature checks, and fail-closed behavior when credentials are absent. It is not operational until non-production R2 credentials and a private bucket are configured and tested.
+- CI run `45350021055` for branch commit `c0b53d396f9e55968134c8207eb3d0c138ab9411` completed successfully: PostgreSQL-only preview guard, Django checks, migration drift checks, migrations against disposable PostgreSQL, and Student Portal API tests.
+- A separate legacy `portal-api-tests.yml` workflow invocation for the same commit reported failure without returning job records; the dedicated Student Portal preview workflow above passed. This separate workflow still needs diagnosis/cleanup so the repository does not show a misleading duplicate failure.
+- No real data has been exported/imported; no Render preview service has been created; Hatchable version 53 remains active; no production cutover or DNS changes have occurred.
+
+### Remaining safe sequence
+
+1. Diagnose the duplicate legacy CI workflow failure and make the intended preview workflow the authoritative check.
+2. Add and test a repeatable, idempotent import dry-run using synthetic fixtures only; output source/target counts, orphan and duplicate-FK reports, and quarantine rows for ambiguous exam-session matches.
+3. Configure a private non-production R2 bucket and credentials, then test upload/finalize/download with synthetic files only.
+4. Configure password-reset email delivery and test with a disposable account.
+5. Only after those checks, prepare a separately reviewed real-data export/import plan. No source rows or receipt files are to be imported without the owner's explicit approval.
+6. Keep Hatchable running. Do not perform production cutover, production DNS changes, or disable Hatchable.
+
