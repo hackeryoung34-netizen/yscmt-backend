@@ -38,3 +38,24 @@ Reviewed commit: `65072749d10eccc63a4a6ea1e9815b7522dc0164`
 ## Decision
 
 **Not approved for production cutover yet.** The successful CI run is encouraging, but it does not prove the live API, payment processing, storage, authorization coverage, or account migration are production-ready. Keep existing production routing and Hatchable service unchanged.
+
+
+## Additional endpoint-level audit (2026-11-27)
+
+The route and view review found these explicit access controls:
+
+- Public registration creates ordinary users with `create_user`; the serializer does not accept staff/superuser flags. Add abuse controls (rate limiting, email verification, monitoring) before public launch.
+- Profile and student directory: authenticated user / staff-only respectively.
+- Enrollments: authenticated; list/detail are scoped to the current user; the student ID is read-only and assigned from the session.
+- Lessons and progress: authenticated; student lesson visibility is scoped to enrolled courses; progress writes require enrollment.
+- Certificates: list/detail/download are authenticated and scoped to the owner unless staff; verification is intentionally public and returns certificate number, student username, course, and issue date. Review privacy policy for this public disclosure.
+- Student dashboard: authenticated and data queries are scoped to the current user.
+- Quiz and question management: public read-only; writes require authenticated staff via `IsAdminUserOrReadOnly`.
+- Quiz attempts: authenticated, current-user scoped, POST-only for mutations, and checks course enrollment.
+- Admin dashboard and student directory: staff-only.
+
+The global DRF default remains `AllowAny`, so any newly added view without an explicit permission declaration would be public. Set a safer global default such as `IsAuthenticated` and explicitly mark only intended public endpoints (course catalogue, registration, certificate verification, and public quiz/question reads) as `AllowAny`. This should be implemented with regression tests, not changed blindly in production.
+
+### Payment-specific finding
+
+The inspected payment endpoint only records a pending payment. Tests currently verify pending record creation and invalid/free course rejection; they do not test a live payment provider, signed webhook, replay/idempotency, currency, amount tampering, or enrollment after verified payment. Never mark a payment paid or grant access based on a browser redirect. Verify the provider's signed server-to-server webhook and amount/currency/reference before a single idempotent state transition.
